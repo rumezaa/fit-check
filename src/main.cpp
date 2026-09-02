@@ -1,7 +1,29 @@
+#include <engine/filter.hpp>
 #include <engine/garment.hpp>
 #include <engine/loader.hpp>
 
 #include <iostream>
+
+namespace
+{
+
+    void show(const engine::Candidates &c, const char *label,
+              const std::vector<engine::Garment> &group)
+    {
+        std::cout << "  " << label << " (" << group.size() << "): ";
+        if (group.empty())
+        {
+            std::cout << "-- none --";
+        }
+        for (const engine::Garment &g : group)
+        {
+            std::cout << g.name << ", ";
+        }
+        std::cout << "\n";
+        (void)c;
+    }
+
+} // namespace
 
 int main(int argc, char **argv)
 {
@@ -13,20 +35,20 @@ int main(int argc, char **argv)
         std::cerr << "no garments loaded\n";
         return 1;
     }
+    std::cout << "closet: " << closet.size() << " garments\n\n";
 
-    std::cout << "loaded " << closet.size() << " garments\n\n";
-    for (const engine::Garment &g : closet)
+    for (const engine::Occasion &occasion : {engine::occasions::wedding(),
+                                             engine::occasions::city_day_out(),
+                                             engine::occasions::workday()})
     {
-        std::cout << g.id << "  " << g.name << "  [" << g.hex << "]"
-                  << (g.clean ? "" : "  (dirty)");
-        if (g.last_worn)
-        {
-            std::cout << "  worn " << engine::to_iso_date(*g.last_worn);
-        }
-        else
-        {
-            std::cout << "  never worn";
-        }
+        const engine::Candidates c = engine::filter_closet(closet, occasion);
+        std::cout << occasion.name << " -- " << c.total() << " of "
+                  << closet.size() << " garments pass"
+                  << (c.complete() ? "" : "   [INCOMPLETE: no outfit possible]")
+                  << "\n";
+        show(c, "tops   ", c.tops);
+        show(c, "bottoms", c.bottoms);
+        show(c, "shoes  ", c.shoes);
         std::cout << "\n";
     }
     return 0;
