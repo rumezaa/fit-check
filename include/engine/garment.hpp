@@ -13,6 +13,7 @@ namespace engine
         Floral,
         PolkaDot,
         Stripes,
+        Graphic,
     };
 
     enum class Category
@@ -50,7 +51,7 @@ namespace engine
 
         bool clean = true;
         float weight = 1.0; // multiplier for if the user wants to wear the piece more often
-        int warmth;         // scale of 1-5 for the warmth of the garment
+        int warmth = 3;     // scale of 1-5 for the warmth of the garment
 
         // empty means never worn.
         std::optional<std::chrono::sys_days> last_worn;

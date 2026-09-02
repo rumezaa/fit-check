@@ -1,0 +1,242 @@
+{
+  "garments": [
+    {
+      "id": 1,
+      "name": "ivory silk blouse",
+      "category": "Top",
+      "color": {
+        "l": 93.9,
+        "c": 4.95,
+        "h": 88.45
+      },
+      "hex": "#F2EDE4",
+      "pattern": "Solid",
+      "formality": "Elegant",
+      "clean": true,
+      "weight": 1.0,
+      "warmth": 2,
+      "last_worn": "2026-08-20"
+    },
+    {
+      "id": 2,
+      "name": "white oxford shirt",
+      "category": "Top",
+      "color": {
+        "l": 98.2,
+        "c": 1.53,
+        "h": 110.06
+      },
+      "hex": "#FAFAF7",
+      "pattern": "Solid",
+      "formality": "Business",
+      "clean": true,
+      "weight": 1.0,
+      "warmth": 2,
+      "last_worn": "2026-08-28"
+    },
+    {
+      "id": 3,
+      "name": "black band tee",
+      "category": "Top",
+      "color": {
+        "l": 10.27,
+        "c": 0.0,
+        "h": 158.2
+      },
+      "hex": "#1C1C1C",
+      "pattern": "Graphic",
+      "formality": "Casual",
+      "clean": true,
+      "weight": 1.5,
+      "warmth": 1,
+      "last_worn": null
+    },
+    {
+      "id": 4,
+      "name": "navy breton top",
+      "category": "Top",
+      "color": {
+        "l": 25.32,
+        "c": 29.66,
+        "h": 287.09
+      },
+      "hex": "#2B3A67",
+      "pattern": "Stripes",
+      "formality": "Casual",
+      "clean": false,
+      "weight": 1.0,
+      "warmth": 3,
+      "last_worn": "2026-08-30"
+    },
+    {
+      "id": 5,
+      "name": "burgundy floral blouse",
+      "category": "Top",
+      "color": {
+        "l": 26.73,
+        "c": 34.05,
+        "h": 8.32
+      },
+      "hex": "#6E2639",
+      "pattern": "Floral",
+      "formality": "Elegant",
+      "clean": true,
+      "weight": 0.8,
+      "warmth": 2,
+      "last_worn": "2026-06-14"
+    },
+    {
+      "id": 6,
+      "name": "charcoal wool trousers",
+      "category": "Bottom",
+      "color": {
+        "l": 24.49,
+        "c": 1.32,
+        "h": 290.45
+      },
+      "hex": "#3A3A3C",
+      "pattern": "Solid",
+      "formality": "Business",
+      "clean": true,
+      "weight": 1.0,
+      "warmth": 4,
+      "last_worn": "2026-08-28"
+    },
+    {
+      "id": 7,
+      "name": "indigo jeans",
+      "category": "Bottom",
+      "color": {
+        "l": 26.55,
+        "c": 16.03,
+        "h": 269.48
+      },
+      "hex": "#2E4057",
+      "pattern": "Solid",
+      "formality": "Casual",
+      "clean": true,
+      "weight": 1.5,
+      "warmth": 3,
+      "last_worn": "2026-08-31"
+    },
+    {
+      "id": 8,
+      "name": "black midi skirt",
+      "category": "Bottom",
+      "color": {
+        "l": 7.85,
+        "c": 2.26,
+        "h": 290.91
+      },
+      "hex": "#17171A",
+      "pattern": "Solid",
+      "formality": "Elegant",
+      "clean": true,
+      "weight": 1.0,
+      "warmth": 2,
+      "last_worn": "2026-07-04"
+    },
+    {
+      "id": 9,
+      "name": "khaki chinos",
+      "category": "Bottom",
+      "color": {
+        "l": 62.0,
+        "c": 20.56,
+        "h": 82.28
+      },
+      "hex": "#A89372",
+      "pattern": "Solid",
+      "formality": "Casual",
+      "clean": false,
+      "weight": 1.0,
+      "warmth": 3,
+      "last_worn": "2026-08-25"
+    },
+    {
+      "id": 10,
+      "name": "polka dot a-line skirt",
+      "category": "Bottom",
+      "color": {
+        "l": 17.66,
+        "c": 5.73,
+        "h": 305.3
+      },
+      "hex": "#2D2A32",
+      "pattern": "PolkaDot",
+      "formality": "Business",
+      "clean": true,
+      "weight": 1.0,
+      "warmth": 2,
+      "last_worn": null
+    },
+    {
+      "id": 11,
+      "name": "black leather loafers",
+      "category": "Shoes",
+      "color": {
+        "l": 9.38,
+        "c": 2.23,
+        "h": 290.93
+      },
+      "hex": "#1A1A1D",
+      "pattern": "Solid",
+      "formality": "Business",
+      "clean": true,
+      "weight": 1.0,
+      "warmth": 3,
+      "last_worn": "2026-08-28"
+    },
+    {
+      "id": 12,
+      "name": "white sneakers",
+      "category": "Shoes",
+      "color": {
+        "l": 93.7,
+        "c": 1.03,
+        "h": 110.09
+      },
+      "hex": "#EDEDEB",
+      "pattern": "Solid",
+      "formality": "Casual",
+      "clean": true,
+      "weight": 1.2,
+      "warmth": 2,
+      "last_worn": "2026-08-31"
+    },
+    {
+      "id": 13,
+      "name": "nude heels",
+      "category": "Shoes",
+      "color": {
+        "l": 69.19,
+        "c": 20.65,
+        "h": 57.59
+      },
+      "hex": "#C8A18A",
+      "pattern": "Solid",
+      "formality": "Elegant",
+      "clean": true,
+      "weight": 0.5,
+      "warmth": 1,
+      "last_worn": "2026-06-14"
+    },
+    {
+      "id": 14,
+      "name": "tan ankle boots",
+      "category": "Shoes",
+      "color": {
+        "l": 43.98,
+        "c": 30.42,
+        "h": 61.63
+      },
+      "hex": "#8B5E3C",
+      "pattern": "Solid",
+      "formality": "Casual",
+      "clean": true,
+      "weight": 1.0,
+      "warmth": 4,
+      "last_worn": null
+    }
+  ]
+}

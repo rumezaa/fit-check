@@ -1,0 +1,20 @@
+[
+{
+  "directory": "/Users/rumeza/Projects/fit-check/engine/build",
+  "command": "/usr/bin/c++  -I/Users/rumeza/Projects/fit-check/engine/include -I/Users/rumeza/Projects/fit-check/engine/build/_deps/nlohmann_json-src/include -g -std=c++20 -arch arm64 -Wall -Wextra -o CMakeFiles/engine.dir/src/loader.cpp.o -c /Users/rumeza/Projects/fit-check/engine/src/loader.cpp",
+  "file": "/Users/rumeza/Projects/fit-check/engine/src/loader.cpp",
+  "output": "CMakeFiles/engine.dir/src/loader.cpp.o"
+},
+{
+  "directory": "/Users/rumeza/Projects/fit-check/engine/build",
+  "command": "/usr/bin/c++  -I/Users/rumeza/Projects/fit-check/engine/include -I/Users/rumeza/Projects/fit-check/engine/build/_deps/nlohmann_json-src/include -g -std=c++20 -arch arm64 -Wall -Wextra -o CMakeFiles/engine.dir/src/filter.cpp.o -c /Users/rumeza/Projects/fit-check/engine/src/filter.cpp",
+  "file": "/Users/rumeza/Projects/fit-check/engine/src/filter.cpp",
+  "output": "CMakeFiles/engine.dir/src/filter.cpp.o"
+},
+{
+  "directory": "/Users/rumeza/Projects/fit-check/engine/build",
+  "command": "/usr/bin/c++  -I/Users/rumeza/Projects/fit-check/engine/include -I/Users/rumeza/Projects/fit-check/engine/build/_deps/nlohmann_json-src/include -g -std=c++20 -arch arm64 -Wall -Wextra -o CMakeFiles/fit-check.dir/src/main.cpp.o -c /Users/rumeza/Projects/fit-check/engine/src/main.cpp",
+  "file": "/Users/rumeza/Projects/fit-check/engine/src/main.cpp",
+  "output": "CMakeFiles/fit-check.dir/src/main.cpp.o"
+}
+]

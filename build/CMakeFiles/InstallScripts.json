@@ -1,0 +1,8 @@
+{
+	"InstallScripts" : 
+	[
+		"/Users/rumeza/Projects/fit-check/engine/build/cmake_install.cmake",
+		"/Users/rumeza/Projects/fit-check/engine/build/_deps/nlohmann_json-build/cmake_install.cmake"
+	],
+	"Parallel" : false
+}
