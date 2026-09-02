@@ -7,20 +7,18 @@
 namespace
 {
 
-    void show(const engine::Candidates &c, const char *label,
-              const std::vector<engine::Garment> &group)
+    void show(const char *label, const std::vector<engine::Garment> &group)
     {
         std::cout << "  " << label << " (" << group.size() << "): ";
         if (group.empty())
         {
             std::cout << "-- none --";
         }
-        for (const engine::Garment &g : group)
+        for (std::size_t i = 0; i < group.size(); ++i)
         {
-            std::cout << g.name << ", ";
+            std::cout << (i > 0 ? ", " : "") << group[i].name;
         }
         std::cout << "\n";
-        (void)c;
     }
 
 } // namespace
@@ -46,9 +44,9 @@ int main(int argc, char **argv)
                   << closet.size() << " garments pass"
                   << (c.complete() ? "" : "   [INCOMPLETE: no outfit possible]")
                   << "\n";
-        show(c, "tops   ", c.tops);
-        show(c, "bottoms", c.bottoms);
-        show(c, "shoes  ", c.shoes);
+        show("tops   ", c.tops);
+        show("bottoms", c.bottoms);
+        show("shoes  ", c.shoes);
         std::cout << "\n";
     }
     return 0;

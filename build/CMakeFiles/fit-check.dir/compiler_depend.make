@@ -908,6 +908,7 @@ CMakeFiles/fit-check.dir/src/main.cpp.o: /Users/rumeza/Projects/fit-check/engine
   /Library/Developer/CommandLineTools/usr/lib/clang/15.0.0/include/stdarg.h \
   /Library/Developer/CommandLineTools/usr/lib/clang/15.0.0/include/stddef.h \
   /Library/Developer/CommandLineTools/usr/lib/clang/15.0.0/include/stdint.h \
+  /Users/rumeza/Projects/fit-check/engine/include/engine/filter.hpp \
   /Users/rumeza/Projects/fit-check/engine/include/engine/garment.hpp \
   /Users/rumeza/Projects/fit-check/engine/include/engine/loader.hpp
 
@@ -915,6 +916,8 @@ CMakeFiles/fit-check.dir/src/main.cpp.o: /Users/rumeza/Projects/fit-check/engine
 /Users/rumeza/Projects/fit-check/engine/include/engine/loader.hpp:
 
 /Users/rumeza/Projects/fit-check/engine/include/engine/garment.hpp:
+
+/Users/rumeza/Projects/fit-check/engine/include/engine/filter.hpp:
 
 /Library/Developer/CommandLineTools/usr/lib/clang/15.0.0/include/stdint.h:
 
