@@ -1,0 +1,11 @@
+{
+  "occasions": [
+    { "name": "Errands",            "min_formality": "Casual",   "max_formality": "Casual" },
+    { "name": "Class",              "min_formality": "Casual",   "max_formality": "Business" },
+    { "name": "Picnic",             "min_formality": "Casual",   "max_formality": "Business" },
+    { "name": "Day out in the city","min_formality": "Casual",   "max_formality": "Business" },
+    { "name": "Coffee chat",        "min_formality": "Casual",   "max_formality": "Business" },
+    { "name": "Corporate",          "min_formality": "Business", "max_formality": "Elegant" },
+    { "name": "Date night",         "min_formality": "Business", "max_formality": "Elegant" }
+  ]
+}

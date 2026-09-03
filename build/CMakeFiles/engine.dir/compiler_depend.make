@@ -1933,6 +1933,7 @@ CMakeFiles/engine.dir/src/loader.cpp.o: /Users/rumeza/Projects/fit-check/engine/
   _deps/nlohmann_json-src/include/nlohmann/ordered_map.hpp \
   _deps/nlohmann_json-src/include/nlohmann/thirdparty/hedley/hedley.hpp \
   _deps/nlohmann_json-src/include/nlohmann/thirdparty/hedley/hedley_undef.hpp \
+  /Users/rumeza/Projects/fit-check/engine/include/engine/filter.hpp \
   /Users/rumeza/Projects/fit-check/engine/include/engine/garment.hpp \
   /Users/rumeza/Projects/fit-check/engine/include/engine/loader.hpp
 

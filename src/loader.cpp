@@ -181,4 +181,56 @@ namespace engine
         return garmentVector;
     }
 
-} // namespace engine
+    std::vector<Occasion> load_occasions(const std::filesystem::path &path)
+    {
+        std::ifstream inputFile(path);
+
+        if (!inputFile.is_open())
+        {
+            std::cerr << "Error opening file: " << path << std::endl;
+            return {};
+        }
+
+        std::vector<Occasion> occasionVector;
+
+        try
+        {
+            json occasionData;
+            inputFile >> occasionData;
+
+            const json &entries = occasionData.at("occasions");
+            occasionVector.reserve(entries.size());
+
+            for (const auto &item : entries)
+            {
+                Occasion o;
+                o.name = item.at("name").get<std::string>();
+                o.min_formality = enumFromString(
+                    item.at("min_formality").get<std::string>(), kFormalities,
+                    "min_formality");
+                o.max_formality = enumFromString(
+                    item.at("max_formality").get<std::string>(), kFormalities,
+                    "max_formality");
+
+                o.require_clean = item.value("require_clean", o.require_clean);
+
+                if (o.min_formality > o.max_formality)
+                {
+                    throw std::runtime_error(std::format(
+                        "occasion '{}' has min_formality above max_formality",
+                        o.name));
+                }
+
+                occasionVector.push_back(std::move(o));
+            }
+        }
+        catch (const std::exception &e)
+        {
+            std::cerr << "Error reading " << path << ": " << e.what() << std::endl;
+            return {};
+        }
+
+        return occasionVector;
+    }
+
+}

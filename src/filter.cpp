@@ -3,38 +3,6 @@
 namespace engine
 {
 
-    namespace occasions
-    {
-
-        Occasion wedding()
-        {
-            Occasion o;
-            o.name = "Wedding";
-            o.min_formality = Formality::Elegant;
-            o.max_formality = Formality::Elegant;
-            return o;
-        }
-
-        Occasion city_day_out()
-        {
-            Occasion o;
-            o.name = "Day out in the city";
-            o.min_formality = Formality::Casual;
-            o.max_formality = Formality::Business;
-            return o;
-        }
-
-        Occasion workday()
-        {
-            Occasion o;
-            o.name = "Workday";
-            o.min_formality = Formality::Business;
-            o.max_formality = Formality::Elegant;
-            return o;
-        }
-
-    } // namespace occasions
-
     bool matches(const Garment &garment, const Occasion &occasion)
     {
         if (occasion.require_clean && !garment.clean)
@@ -49,15 +17,10 @@ namespace engine
             return false;
         }
 
-        if (garment.warmth < occasion.min_warmth ||
-            garment.warmth > occasion.max_warmth)
-        {
-            return false;
-        }
-
         return true;
     }
 
+    // check if we have all aspects of our outfit ready
     bool Candidates::complete() const
     {
         return !tops.empty() && !bottoms.empty() && !shoes.empty();
@@ -68,6 +31,7 @@ namespace engine
         return tops.size() + bottoms.size() + shoes.size();
     }
 
+    // building possible combinations that pass our criteria
     Candidates filter_closet(const std::vector<Garment> &closet,
                              const Occasion &occasion)
     {
@@ -97,4 +61,4 @@ namespace engine
         return candidates;
     }
 
-} // namespace engine
+}

@@ -25,19 +25,27 @@ namespace
 
 int main(int argc, char **argv)
 {
-    const std::string path = (argc > 1) ? argv[1] : "fixtures/closet.json";
+    const std::string closetPath = (argc > 1) ? argv[1] : "fixtures/closet.json";
+    const std::string occasionPath = (argc > 2) ? argv[2] : "fixtures/occasions.json";
 
-    const std::vector<engine::Garment> closet = engine::load_closet(path);
+    const std::vector<engine::Garment> closet = engine::load_closet(closetPath);
     if (closet.empty())
     {
         std::cerr << "no garments loaded\n";
         return 1;
     }
-    std::cout << "closet: " << closet.size() << " garments\n\n";
 
-    for (const engine::Occasion &occasion : {engine::occasions::wedding(),
-                                             engine::occasions::city_day_out(),
-                                             engine::occasions::workday()})
+    const std::vector<engine::Occasion> occasions = engine::load_occasions(occasionPath);
+    if (occasions.empty())
+    {
+        std::cerr << "no occasions loaded\n";
+        return 1;
+    }
+
+    std::cout << "closet: " << closet.size() << " garments, "
+              << occasions.size() << " occasions\n\n";
+
+    for (const engine::Occasion &occasion : occasions)
     {
         const engine::Candidates c = engine::filter_closet(closet, occasion);
         std::cout << occasion.name << " -- " << c.total() << " of "
