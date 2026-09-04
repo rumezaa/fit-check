@@ -16,7 +16,7 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(nlohmann_json)
 
-add_library(engine src/loader.cpp src/filter.cpp)
+add_library(engine src/loader.cpp src/filter.cpp src/score.cpp)
 target_include_directories(engine PUBLIC include)
 target_link_libraries(engine PUBLIC nlohmann_json::nlohmann_json)
 target_compile_options(engine PRIVATE -Wall -Wextra)
