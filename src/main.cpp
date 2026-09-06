@@ -1,36 +1,30 @@
 #include <engine/filter.hpp>
 #include <engine/garment.hpp>
-#include <engine/loader.hpp>
+#include <engine/request.hpp>
 #include <engine/score.hpp>
 
+#include <nlohmann/json.hpp>
+
 #include <algorithm>
+#include <chrono>
+#include <exception>
 #include <format>
 #include <iostream>
+#include <random>
+#include <string>
 #include <vector>
+
+using json = nlohmann::json;
 
 namespace
 {
 
-    // how many of the best pairs to print per occasion/aesthetic
-    constexpr std::size_t kShowBest = 3;
+    // pool we pick from - small enough a bad outfit never shows up, big enough
+    // that we dont get the same answer every run
+    constexpr std::size_t kPoolSize = 7;
 
-    void show(const char *label, const std::vector<engine::Garment> &group)
-    {
-        std::cout << "  " << label << " (" << group.size() << "): ";
-        if (group.empty())
-        {
-            std::cout << "-- none --";
-        }
-        for (std::size_t i = 0; i < group.size(); ++i)
-        {
-            std::cout << (i > 0 ? ", " : "") << group[i].name;
-        }
-        std::cout << "\n";
-    }
-
-    // A scored combination, kept alongside the garments it came from so the
-    // pieces can be named when printing. The pointers borrow from the
-    // Candidates, which outlives every RankedPair built from it.
+    // a scored combo plus the pieces that made it so we can name them when
+    // printing - the pointers borrow from Candidates which outlives them
     struct RankedPair
     {
         engine::ScoreRes score;
@@ -39,14 +33,13 @@ namespace
         const engine::Garment *bottom = nullptr;
     };
 
-    // Scores every top x bottom combination, best first. The closet is small,
-    // so the full cross product is cheaper than being clever about it.
     std::vector<RankedPair> rank_pairs(const engine::Candidates &candidates,
                                        const engine::Occasion &occasion,
-                                       const engine::Aesthetic &vibe)
+                                       const engine::Aesthetic &vibe,
+                                       std::chrono::sys_days today)
     {
-        std::vector<RankedPair> ranked;
-        ranked.reserve(candidates.tops.size() * candidates.bottoms.size());
+        std::vector<RankedPair> sorted_ranked_pairs;
+        sorted_ranked_pairs.reserve(candidates.tops.size() * candidates.bottoms.size());
 
         // we take the cartesian products and get the score
         for (const engine::Garment &top : candidates.tops)
@@ -54,95 +47,154 @@ namespace
             for (const engine::Garment &bottom : candidates.bottoms)
             {
                 RankedPair pair;
-                pair.score = engine::score_pair(top, bottom, occasion, vibe);
+                pair.score = engine::score_pair(top, bottom, occasion, vibe, today);
                 pair.total = pair.score.total();
                 pair.top = &top;
                 pair.bottom = &bottom;
-                ranked.push_back(pair);
+                sorted_ranked_pairs.push_back(pair);
             }
         }
 
-        std::ranges::sort(ranked, std::ranges::greater{}, &RankedPair::total);
-        return ranked;
+        std::ranges::sort(sorted_ranked_pairs, std::ranges::greater{}, &RankedPair::total);
+        return sorted_ranked_pairs;
     }
 
-    // The per-axis breakdown is here on purpose: the weighted total alone
-    // tells you nothing about which constant to reach for when a pairing
-    // scores badly.
-    void print_pair(const RankedPair &pair)
+    // picks one outfit from the best few, leaning towards the better ones but
+    // never stuck on the top score so we get a different answer each run
+    //
+    // we weight by rank not by total - a total based weight makes the bias
+    // depend on how spread out the pool is, ranks give us the same odds either
+    // way and the best pair stays kPoolSize times likelier than the last
+    std::size_t select(const std::vector<RankedPair> &sorted_ranked_pairs,
+                       std::mt19937 &rng)
     {
-        std::cout << std::format(
-            "    {:>7.1f}  {:<20} + {:<20} [col {:>6.1f}  frm {:>6.1f}  "
-            "pat {:>6.1f}  pal {:>6.1f}]\n",
-            pair.total, pair.top->name, pair.bottom->name, pair.score.color,
-            pair.score.formality, pair.score.pattern, pair.score.palette);
+        const std::size_t pool = std::min(kPoolSize, sorted_ranked_pairs.size());
+
+        std::vector<double> odds(pool);
+        for (std::size_t i = 0; i < pool; ++i)
+        {
+            odds[i] = static_cast<double>(pool - i);
+        }
+
+        std::discrete_distribution<std::size_t> pick(odds.begin(), odds.end());
+        return pick(rng);
+    }
+
+    json garment_json(const engine::Garment &g)
+    {
+        return json{{"id", g.id}, {"name", g.name}, {"hex", g.hex}};
+    }
+
+    // we keep the per axis breakdown in the payload on purpose - the total
+    // alone doesnt tell us which constant to fix when a pairing looks wrong
+    json pair_json(const RankedPair &pair, std::size_t rank)
+    {
+        return json{
+            {"rank", rank},
+            {"total", pair.total},
+            {"top", garment_json(*pair.top)},
+            {"bottom", garment_json(*pair.bottom)},
+            {"scores", {{"color", pair.score.color},
+                        {"formality", pair.score.formality},
+                        {"pattern", pair.score.pattern},
+                        {"palette", pair.score.palette},
+                        {"recency", pair.score.recency},
+                        {"shape", pair.score.shape}}}};
+    }
+
+    // every exit goes through here so whoever is reading our stdout always
+    // gets json back, never a bare message
+    int fail(const std::string &message)
+    {
+        std::cout << json{{"ok", false}, {"error", message}}.dump() << "\n";
+        return 1;
+    }
+
+    // looks up one entry by name so a typo comes back as an error we can read
+    // rather than silently scoring against the wrong thing
+    template <typename T>
+    const T &find_named(const std::vector<T> &items, const std::string &name,
+                        const char *what)
+    {
+        const auto it = std::ranges::find(items, name, &T::name);
+        if (it == items.end())
+        {
+            throw std::runtime_error(
+                std::format("unknown {}: '{}'", what, name));
+        }
+        return *it;
     }
 
 } // namespace
 
-int main(int argc, char **argv)
+int main()
 {
-    const std::string closetPath = (argc > 1) ? argv[1] : "fixtures/closet.json";
-    const std::string occasionPath = (argc > 2) ? argv[2] : "fixtures/occasions.json";
-    const std::string aestheticPath = (argc > 3) ? argv[3] : "fixtures/aesthetics.json";
-
-    const std::vector<engine::Garment> closet = engine::load_closet(closetPath);
-    if (closet.empty())
+    engine::Request req;
+    try
     {
-        std::cerr << "no garments loaded\n";
-        return 1;
+        req = engine::read_request(std::cin);
+    }
+    catch (const std::exception &e)
+    {
+        return fail(std::string{"bad request: "} + e.what());
     }
 
-    const std::vector<engine::Occasion> occasions = engine::load_occasions(occasionPath);
-    if (occasions.empty())
+    try
     {
-        std::cerr << "no occasions loaded\n";
-        return 1;
-    }
+        const engine::Occasion &occasion =
+            find_named(req.occasions, req.occasion, "occasion");
+        const engine::Aesthetic &vibe = find_named(req.vibes, req.vibe, "vibe");
 
-    const std::vector<engine::Aesthetic> vibes = engine::load_aesthetics(aestheticPath);
-    if (vibes.empty())
-    {
-        std::cerr << "no vibes loaded\n";
-        return 1;
-    }
+        // one clock read for the whole run so everything is measured against the same day
+        const std::chrono::sys_days today =
+            std::chrono::floor<std::chrono::days>(std::chrono::system_clock::now());
 
-    std::cout << "closet: " << closet.size() << " garments, "
-              << occasions.size() << " occasions, "
-              << vibes.size() << " vibes\n\n";
+        const engine::Candidates candidates =
+            engine::filter_closet(req.closet, occasion, req.weather);
+        const engine::WarmthRange warmth = engine::warmth_for(req.weather);
 
-    for (const engine::Occasion &occasion : occasions)
-    {
-        const engine::Candidates c = engine::filter_closet(closet, occasion);
-        std::cout << occasion.name << " -- " << c.total() << " of "
-                  << closet.size() << " garments pass"
-                  << (c.complete() ? "" : "   [INCOMPLETE: no outfit possible]")
-                  << "\n";
-        show("tops   ", c.tops);
-        show("bottoms", c.bottoms);
-        show("shoes  ", c.shoes);
+        const std::vector<RankedPair> sorted_ranked_pairs =
+            rank_pairs(candidates, occasion, vibe, today);
 
-        // Scoring is top/bottom only for now, so an empty shoe rack still
-        // leaves pairs worth ranking even though it blocks a real outfit.
-        if (c.tops.empty() || c.bottoms.empty())
+        json out{
+            {"ok", true},
+            {"occasion", occasion.name},
+            {"vibe", vibe.name},
+            {"weather", {{"temp_c", req.weather.temp_c},
+                         {"warmth_min", warmth.min},
+                         {"warmth_max", warmth.max}}},
+            {"candidates", {{"tops", candidates.tops.size()},
+                            {"bottoms", candidates.bottoms.size()},
+                            {"shoes", candidates.shoes.size()},
+                            {"complete", candidates.complete()}}},
+            {"pairs_scored", sorted_ranked_pairs.size()},
+        };
+
+        if (sorted_ranked_pairs.empty())
         {
-            std::cout << "  no pairs to score\n\n";
-            continue;
+            // nothing to wear isnt an error, its an answer
+            out["pick"] = nullptr;
+            out["ranked"] = json::array();
+            std::cout << out.dump() << "\n";
+            return 0;
         }
 
-        for (const engine::Aesthetic &vibe : vibes)
-        {
-            const std::vector<RankedPair> ranked = rank_pairs(c, occasion, vibe);
-            std::cout << std::format("\n  {} -- best {} of {} pairs\n", vibe.name,
-                                     std::min(kShowBest, ranked.size()),
-                                     ranked.size());
+        std::mt19937 rng{req.seed ? *req.seed : std::random_device{}()};
+        const std::size_t picked = select(sorted_ranked_pairs, rng);
+        out["pick"] = pair_json(sorted_ranked_pairs[picked], picked + 1);
 
-            for (std::size_t i = 0; i < ranked.size() && i < kShowBest; ++i)
-            {
-                print_pair(ranked[i]);
-            }
+        json ranked = json::array();
+        for (std::size_t i = 0; i < sorted_ranked_pairs.size() && i < req.limit; ++i)
+        {
+            ranked.push_back(pair_json(sorted_ranked_pairs[i], i + 1));
         }
-        std::cout << "\n";
+        out["ranked"] = ranked;
+
+        std::cout << out.dump() << "\n";
+        return 0;
     }
-    return 0;
+    catch (const std::exception &e)
+    {
+        return fail(e.what());
+    }
 }

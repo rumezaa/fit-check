@@ -23,6 +23,37 @@ namespace engine
         Shoes,
     };
 
+    // how the piece sits on us - separates a corset from a cami when theyre both black satin
+    enum class Silhouette
+    {
+        Fitted,
+        Straight,
+        Flowy,
+        Oversized,
+    };
+
+    // hemline, tops are NA so a vibe asking for maxi doesnt punish them
+    enum class Length
+    {
+        NA,
+        Mini,
+        Midi,
+        Maxi,
+    };
+
+    enum class Fabric
+    {
+        Cotton,
+        Denim,
+        Knit,
+        Linen,
+        Wool,
+        Silk,
+        Satin,
+        Lace,
+        Leather,
+    };
+
     enum class Formality
     {
         Casual,
@@ -48,6 +79,10 @@ namespace engine
         std::string hex; // "#1b2a5e", for display only; derive it from `color`
         Pattern pattern = Pattern::Solid;
         Formality formality = Formality::Casual;
+
+        Silhouette silhouette = Silhouette::Straight;
+        Length length = Length::NA;
+        Fabric fabric = Fabric::Cotton;
 
         bool clean = true;
         float weight = 1.0; // multiplier for if the user wants to wear the piece more often

@@ -2,6 +2,8 @@
 
 #include <algorithm>
 #include <array>
+#include <chrono>
+#include <vector>
 #include <cmath>
 
 namespace
@@ -11,7 +13,9 @@ namespace
     using engine::Garment;
     using engine::Lch;
     using engine::Occasion;
+    using engine::Length;
     using engine::PaletteTarget;
+    using engine::ShapeTarget;
     using engine::Pattern;
     using engine::ScoreRes;
 
@@ -35,6 +39,21 @@ namespace
     constexpr float MONO = 30.0f;
     constexpr float CLASH = -30.0f;
     constexpr float MUDDY = -20.0f;
+
+    // recency bands, in days since the piece was last worn
+    constexpr int STALE_DAYS = 30; // past this it counts as rested
+    constexpr int RECENT_DAYS = 7; // worn this week
+    constexpr int JUST_WORN_DAYS = 2;
+
+    constexpr float NEVER_WORN = 20.0f;  // owned and ignored, push it forward
+    constexpr float RESTED = 10.0f;      // long enough ago to feel fresh
+    constexpr float SETTLING = 0.0f;     // a couple of weeks back, neutral
+    constexpr float RECENT = -15.0f;     // worn this week
+    constexpr float JUST_WORN = -30.0f;  // worn in the last day or two
+
+    // each dimension the vibe cares about pays out or costs, so matching all three beats matching one
+    constexpr float SHAPE_HIT = 15.0f;
+    constexpr float SHAPE_MISS = -10.0f;
 
     constexpr float LO_SCORE_RANGE = -50.0f;
     constexpr float HI_SCORE_RANGE = 50.0f;
@@ -78,6 +97,70 @@ namespace
             return HI_SCORE_RANGE;
         }
         return x;
+    }
+
+    // how rested a piece is - never worn scores best since we own it and its not earning its place
+    float rank_recency(const Garment &g, std::chrono::sys_days today)
+    {
+        if (!g.last_worn.has_value())
+        {
+            return NEVER_WORN;
+        }
+
+        const auto days = (today - *g.last_worn).count();
+
+        if (days <= JUST_WORN_DAYS)
+        {
+            return JUST_WORN;
+        }
+        if (days <= RECENT_DAYS)
+        {
+            return RECENT;
+        }
+        if (days <= STALE_DAYS)
+        {
+            return SETTLING;
+        }
+        return RESTED;
+    }
+
+    // averaged like the other axes so one stale piece cant drag up a shirt we wore yesterday
+    float score_recency(const Garment &top, const Garment &bottom,
+                        std::chrono::sys_days today)
+    {
+        return (rank_recency(top, today) + rank_recency(bottom, today)) / 2;
+    }
+
+    // is it in the vibes list - an empty list means it doesnt care so thats worth nothing, not a miss
+    template <typename E>
+    float shape_axis(const std::vector<E> &wanted, E actual)
+    {
+        if (wanted.empty())
+        {
+            return 0.0f;
+        }
+        return std::ranges::find(wanted, actual) != wanted.end() ? SHAPE_HIT
+                                                                  : SHAPE_MISS;
+    }
+
+    float rank_shape_fit(const Garment &g, const ShapeTarget &target)
+    {
+        float score = shape_axis(target.silhouettes, g.silhouette) +
+                      shape_axis(target.fabrics, g.fabric);
+
+        // tops have no hemline so we only judge bottoms on length
+        if (g.length != Length::NA)
+        {
+            score += shape_axis(target.lengths, g.length);
+        }
+
+        return map_range(score);
+    }
+
+    float score_shape(const Garment &top, const Garment &bottom,
+                      const ShapeTarget &target)
+    {
+        return (rank_shape_fit(top, target) + rank_shape_fit(bottom, target)) / 2;
     }
 
     // using lch scale gives us a more dim look on complementary color using degree dist. in hues and l and c
@@ -257,17 +340,21 @@ namespace engine
     float ScoreRes::total() const
     {
         return color * weights.color + formality * weights.formality +
-               pattern * weights.pattern + palette * weights.palette;
+               pattern * weights.pattern + palette * weights.palette +
+               recency * weights.recency + shape * weights.shape;
     }
 
     ScoreRes score_pair(const Garment &top, const Garment &bottom,
-                        const Occasion &occ, const Aesthetic &vibe)
+                        const Occasion &occ, const Aesthetic &vibe,
+                        std::chrono::sys_days today)
     {
         ScoreRes res{};
         res.color = score_color(top, bottom);
         res.formality = score_formality(top, bottom, occ);
         res.pattern = score_pattern(top, bottom);
         res.palette = score_aesthetic(top, bottom, vibe.palette);
+        res.recency = score_recency(top, bottom, today);
+        res.shape = score_shape(top, bottom, vibe.shape);
         res.weights = vibe.weights;
         return res;
     }
