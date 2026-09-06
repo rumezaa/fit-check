@@ -1,14 +1,19 @@
 #include <engine/score.hpp>
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 
 namespace
 {
+    using engine::Aesthetic;
     using engine::Formality;
     using engine::Garment;
     using engine::Lch;
     using engine::Occasion;
+    using engine::PaletteTarget;
+    using engine::Pattern;
+    using engine::ScoreRes;
 
     // ---- tunable constants ----
     constexpr float NEUTRAL_C = 15.0f;     // below this chroma, treat as neutral
@@ -48,9 +53,9 @@ namespace
         return std::min(d, 360.0f - d); // short way around the circle
     }
 
-    int rank_formality(const Garment &g)
+    int rank_formality(Formality f)
     {
-        switch (g.formality)
+        switch (f)
         {
         case Formality::Casual:
             return 0;
@@ -58,9 +63,8 @@ namespace
             return 1;
         case Formality::Elegant:
             return 2;
-        default:
-            return 0;
         }
+        return 0;
     }
 
     float map_range(float x)
@@ -133,7 +137,7 @@ namespace
         // find if pieces are consistent with each other - in general a a plain cotton t-shirt w/ silk skirt === clash
         float consistency;
 
-        float spread = std::abs(rank_formality(top) - rank_formality(bottom));
+        int spread = std::abs(rank_formality(top.formality) - rank_formality(bottom.formality));
 
         if (spread == 0)
         {
@@ -150,11 +154,13 @@ namespace
 
         // find if they fit the occasions range
         float fit;
-        int top_rank = rank_formality(top);
-        int bott_rank = rank_formality(bottom);
+        int top_rank = rank_formality(top.formality);
+        int bott_rank = rank_formality(bottom.formality);
+        int occ_min = rank_formality(occ.min_formality);
+        int occ_max = rank_formality(occ.max_formality);
 
-        bool top_fit = (occ.min_formality <= top_rank) && (top_rank <= occ.max_formality);
-        bool bott_fit = (occ.min_formality <= bott_rank) && (bott_rank <= occ.max_formality);
+        bool top_fit = (occ_min <= top_rank) && (top_rank <= occ_max);
+        bool bott_fit = (occ_min <= bott_rank) && (bott_rank <= occ_max);
 
         if (top_fit && bott_fit)
         {
@@ -171,24 +177,98 @@ namespace
 
         return (consistency + fit) / 2;
     }
+
+    float score_pattern(const Garment &top, const Garment &bottom)
+    {
+        Pattern t = top.pattern;
+        Pattern b = bottom.pattern;
+
+        if (t == Pattern::Solid && b == Pattern::Solid)
+        {
+            return OKAY;
+        }
+
+        if (t == Pattern::Solid || b == Pattern::Solid)
+        {
+            return GREAT;
+        }
+
+        // case for the same pattern
+        if (t == b)
+        {
+            return OKAY;
+        }
+
+        return CLASH;
+    }
+
+    float rank_aesthetic_fit(const Garment &g, const PaletteTarget &target)
+    {
+        float score = 0;
+
+        // chroma in wanted band ?
+        if (target.chroma_min <= g.color.c && g.color.c <= target.chroma_max)
+        {
+            score += 20;
+        }
+        else
+        {
+            score -= 20;
+        }
+
+        // lightness in wanted band for aesthetic ?
+        if (target.l_min <= g.color.l && g.color.l <= target.l_max)
+        {
+            score += 15;
+        }
+        else
+        {
+            score -= 15;
+        }
+
+        // is hue in wanted arc - if the color is muted we should skip it ?
+        if (!is_neutral(g.color))
+        {
+
+            if (hue_dist(g.color.h, target.hue_center) <= target.hue_spread)
+            {
+
+                score += 15;
+            }
+            else
+            {
+                score -= 15;
+            }
+        }
+
+        return map_range(score);
+    }
+
+    float score_aesthetic(const Garment &top, const Garment &bottom, const PaletteTarget &target)
+    {
+        return (rank_aesthetic_fit(top, target) + rank_aesthetic_fit(bottom, target)) / 2;
+    }
+
 } // namespace
 
 namespace engine
 {
 
-    float ScoreRes::total(const AestheticWeights &w) const
+    float ScoreRes::total() const
     {
-        return color * w.color + formality * w.formality + pattern * w.pattern;
+        return color * weights.color + formality * weights.formality +
+               pattern * weights.pattern + palette * weights.palette;
     }
 
-    ScoreRes score_pair(const Garment &top, const Garment &bottom, const Occasion &occ)
+    ScoreRes score_pair(const Garment &top, const Garment &bottom,
+                        const Occasion &occ, const Aesthetic &vibe)
     {
-        (void)occ; // formality/pattern scoring not written yet
-
         ScoreRes res{};
         res.color = score_color(top, bottom);
-        res.formality = 0.0f;
-        res.pattern = 0.0f;
+        res.formality = score_formality(top, bottom, occ);
+        res.pattern = score_pattern(top, bottom);
+        res.palette = score_aesthetic(top, bottom, vibe.palette);
+        res.weights = vibe.weights;
         return res;
     }
 

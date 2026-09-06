@@ -3,6 +3,7 @@
 #include <nlohmann/json.hpp>
 
 #include <array>
+#include <cmath>
 #include <format>
 #include <fstream>
 #include <iostream>
@@ -231,6 +232,88 @@ namespace engine
         }
 
         return occasionVector;
+    }
+
+    std::vector<Aesthetic> load_aesthetics(const std::filesystem::path &path)
+    {
+        std::ifstream inputFile(path);
+
+        if (!inputFile.is_open())
+        {
+            std::cerr << "Error opening file: " << path << std::endl;
+            return {};
+        }
+
+        std::vector<Aesthetic> aestheticVector;
+
+        try
+        {
+            json aestheticData;
+            inputFile >> aestheticData;
+
+            const json &entries = aestheticData.at("aesthetics");
+            aestheticVector.reserve(entries.size());
+
+            for (const auto &item : entries)
+            {
+                Aesthetic a;
+                a.name = item.at("name").get<std::string>();
+
+                // Both sub-objects are optional, and so is every key inside
+                // them: aesthetics only list the axes they care about, so a
+                // missing key keeps the default already sitting in the struct.
+                const json weights = item.value("weights", json::object());
+                a.weights.color = weights.value("color", a.weights.color);
+                a.weights.formality = weights.value("formality", a.weights.formality);
+                a.weights.pattern = weights.value("pattern", a.weights.pattern);
+                a.weights.palette = weights.value("palette", a.weights.palette);
+
+                const json palette = item.value("palette", json::object());
+                a.palette.chroma_min = palette.value("chroma_min", a.palette.chroma_min);
+                a.palette.chroma_max = palette.value("chroma_max", a.palette.chroma_max);
+                a.palette.l_min = palette.value("l_min", a.palette.l_min);
+                a.palette.l_max = palette.value("l_max", a.palette.l_max);
+                a.palette.hue_center = palette.value("hue_center", a.palette.hue_center);
+                a.palette.hue_spread = palette.value("hue_spread", a.palette.hue_spread);
+
+                if (a.palette.chroma_min > a.palette.chroma_max)
+                {
+                    throw std::runtime_error(std::format(
+                        "aesthetic '{}' has chroma_min above chroma_max", a.name));
+                }
+
+                if (a.palette.l_min > a.palette.l_max)
+                {
+                    throw std::runtime_error(std::format(
+                        "aesthetic '{}' has l_min above l_max", a.name));
+                }
+
+                // hue_dist() never exceeds 180, so a wider spread would just be
+                // a quiet way of saying "any hue" and is more likely a typo.
+                if (a.palette.hue_spread < 0.0f || a.palette.hue_spread > 180.0f)
+                {
+                    throw std::runtime_error(std::format(
+                        "aesthetic '{}' has hue_spread {} outside 0-180",
+                        a.name, a.palette.hue_spread));
+                }
+
+                // The wheel wraps, so 400 and -320 are both just 40.
+                a.palette.hue_center = std::fmod(a.palette.hue_center, 360.0f);
+                if (a.palette.hue_center < 0.0f)
+                {
+                    a.palette.hue_center += 360.0f;
+                }
+
+                aestheticVector.push_back(std::move(a));
+            }
+        }
+        catch (const std::exception &e)
+        {
+            std::cerr << "Error reading " << path << ": " << e.what() << std::endl;
+            return {};
+        }
+
+        return aestheticVector;
     }
 
 }
