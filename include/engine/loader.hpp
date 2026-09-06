@@ -1,5 +1,6 @@
 #pragma once
 
+#include <engine/aesthetic.hpp>
 #include <engine/filter.hpp>
 #include <engine/garment.hpp>
 
@@ -19,4 +20,9 @@ namespace engine
 
     std::string to_iso_date(std::chrono::sys_days day);
 
+    // Reads the aesthetic definitions (see fixtures/aesthetics.json)
+    //
+    // Only "name" is required. Every key under "weights" and "palette" is
+    // optional and falls back to the default on Weights / PaletteTarget.
+    std::vector<Aesthetic> load_aesthetics(const std::filesystem::path &path);
 }

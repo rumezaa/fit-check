@@ -1,0 +1,31 @@
+{
+  "aesthetics": [
+    {
+      "name": "dark academia",
+      "weights": { "color": 1.0, "formality": 1.5, "pattern": 0.7, "palette": 2.0 },
+      "palette": {
+        "chroma_max": 40,
+        "l_min": 15, "l_max": 55,
+        "hue_center": 70, "hue_spread": 60
+      }
+    },
+    {
+      "name": "fairycore",
+      "weights": { "palette": 2.0, "pattern": 1.3, "formality": 0.5 },
+      "palette": {
+        "chroma_max": 45,
+        "l_min": 65, "l_max": 100,
+        "hue_center": 120, "hue_spread": 90
+      }
+    },
+    {
+      "name": "baddie",
+      "weights": { "palette": 1.8, "color": 1.2, "formality": 0.3 },
+      "palette": {
+        "chroma_min": 55,
+        "l_min": 0, "l_max": 100,
+        "hue_center": 0, "hue_spread": 180
+      }
+    }
+  ]
+}
