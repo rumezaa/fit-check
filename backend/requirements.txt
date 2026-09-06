@@ -1,2 +1,15 @@
+# api
+fastapi
+uvicorn
+python-multipart   # required for UploadFile / multipart form parsing
+pydantic
+
+# ingestion
 rembg
 pillow
+numpy
+scikit-image
+scikit-learn
+
+# test only
+httpx              # starlette's TestClient imports it

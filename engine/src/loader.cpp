@@ -209,12 +209,7 @@ namespace engine
             return garmentVector;
         }
 
-        std::vector<Occasion> parseOccasions(const json &entries)
-        {
-        std::vector<Occasion> occasionVector;
-        occasionVector.reserve(entries.size());
-
-        for (const auto &item : entries)
+        Occasion parseOccasion(const json &item)
         {
             Occasion o;
             o.name = item.at("name").get<std::string>();
@@ -234,74 +229,89 @@ namespace engine
                     o.name));
             }
 
-            occasionVector.push_back(std::move(o));
+            return o;
         }
+
+        std::vector<Occasion> parseOccasions(const json &entries)
+        {
+            std::vector<Occasion> occasionVector;
+            occasionVector.reserve(entries.size());
+
+            for (const auto &item : entries)
+            {
+                occasionVector.push_back(parseOccasion(item));
+            }
             return occasionVector;
+        }
+
+        Aesthetic parseAesthetic(const json &item)
+        {
+        Aesthetic a;
+        a.name = item.at("name").get<std::string>();
+
+        // all optional - vibes only list the axes they care about so a
+        // missing key keeps whatever default is on the struct
+        const json weights = item.value("weights", json::object());
+        a.weights.color = weights.value("color", a.weights.color);
+        a.weights.formality = weights.value("formality", a.weights.formality);
+        a.weights.pattern = weights.value("pattern", a.weights.pattern);
+        a.weights.palette = weights.value("palette", a.weights.palette);
+        a.weights.recency = weights.value("recency", a.weights.recency);
+        a.weights.shape = weights.value("shape", a.weights.shape);
+
+        const json palette = item.value("palette", json::object());
+        a.palette.chroma_min = palette.value("chroma_min", a.palette.chroma_min);
+        a.palette.chroma_max = palette.value("chroma_max", a.palette.chroma_max);
+        a.palette.l_min = palette.value("l_min", a.palette.l_min);
+        a.palette.l_max = palette.value("l_max", a.palette.l_max);
+        a.palette.hue_center = palette.value("hue_center", a.palette.hue_center);
+        a.palette.hue_spread = palette.value("hue_spread", a.palette.hue_spread);
+
+        if (a.palette.chroma_min > a.palette.chroma_max)
+        {
+            throw std::runtime_error(std::format(
+                "aesthetic '{}' has chroma_min above chroma_max", a.name));
+        }
+
+        if (a.palette.l_min > a.palette.l_max)
+        {
+            throw std::runtime_error(std::format(
+                "aesthetic '{}' has l_min above l_max", a.name));
+        }
+
+        // hue_dist never goes past 180 so anything wider is probably a typo
+        if (a.palette.hue_spread < 0.0f || a.palette.hue_spread > 180.0f)
+        {
+            throw std::runtime_error(std::format(
+                "aesthetic '{}' has hue_spread {} outside 0-180",
+                a.name, a.palette.hue_spread));
+        }
+
+        const json shape = item.value("shape", json::object());
+        a.shape.silhouettes =
+            enumListFromJson(shape, "silhouettes", kSilhouettes);
+        a.shape.lengths = enumListFromJson(shape, "lengths", kLengths);
+        a.shape.fabrics = enumListFromJson(shape, "fabrics", kFabrics);
+
+        // the wheel wraps so 400 and -320 are both just 40
+        a.palette.hue_center = std::fmod(a.palette.hue_center, 360.0f);
+        if (a.palette.hue_center < 0.0f)
+        {
+            a.palette.hue_center += 360.0f;
+        }
+
+            return a;
         }
 
         std::vector<Aesthetic> parseAesthetics(const json &entries)
         {
-        std::vector<Aesthetic> aestheticVector;
-        aestheticVector.reserve(entries.size());
+            std::vector<Aesthetic> aestheticVector;
+            aestheticVector.reserve(entries.size());
 
-        for (const auto &item : entries)
-        {
-            Aesthetic a;
-            a.name = item.at("name").get<std::string>();
-
-            // all optional - vibes only list the axes they care about so a
-            // missing key keeps whatever default is on the struct
-            const json weights = item.value("weights", json::object());
-            a.weights.color = weights.value("color", a.weights.color);
-            a.weights.formality = weights.value("formality", a.weights.formality);
-            a.weights.pattern = weights.value("pattern", a.weights.pattern);
-            a.weights.palette = weights.value("palette", a.weights.palette);
-            a.weights.recency = weights.value("recency", a.weights.recency);
-            a.weights.shape = weights.value("shape", a.weights.shape);
-
-            const json palette = item.value("palette", json::object());
-            a.palette.chroma_min = palette.value("chroma_min", a.palette.chroma_min);
-            a.palette.chroma_max = palette.value("chroma_max", a.palette.chroma_max);
-            a.palette.l_min = palette.value("l_min", a.palette.l_min);
-            a.palette.l_max = palette.value("l_max", a.palette.l_max);
-            a.palette.hue_center = palette.value("hue_center", a.palette.hue_center);
-            a.palette.hue_spread = palette.value("hue_spread", a.palette.hue_spread);
-
-            if (a.palette.chroma_min > a.palette.chroma_max)
+            for (const auto &item : entries)
             {
-                throw std::runtime_error(std::format(
-                    "aesthetic '{}' has chroma_min above chroma_max", a.name));
+                aestheticVector.push_back(parseAesthetic(item));
             }
-
-            if (a.palette.l_min > a.palette.l_max)
-            {
-                throw std::runtime_error(std::format(
-                    "aesthetic '{}' has l_min above l_max", a.name));
-            }
-
-            // hue_dist never goes past 180 so anything wider is probably a typo
-            if (a.palette.hue_spread < 0.0f || a.palette.hue_spread > 180.0f)
-            {
-                throw std::runtime_error(std::format(
-                    "aesthetic '{}' has hue_spread {} outside 0-180",
-                    a.name, a.palette.hue_spread));
-            }
-
-            const json shape = item.value("shape", json::object());
-            a.shape.silhouettes =
-                enumListFromJson(shape, "silhouettes", kSilhouettes);
-            a.shape.lengths = enumListFromJson(shape, "lengths", kLengths);
-            a.shape.fabrics = enumListFromJson(shape, "fabrics", kFabrics);
-
-            // the wheel wraps so 400 and -320 are both just 40
-            a.palette.hue_center = std::fmod(a.palette.hue_center, 360.0f);
-            if (a.palette.hue_center < 0.0f)
-            {
-                a.palette.hue_center += 360.0f;
-            }
-
-            aestheticVector.push_back(std::move(a));
-        }
             return aestheticVector;
         }
 
@@ -406,8 +416,12 @@ namespace engine
         in >> doc;
 
         Request req;
-        req.occasion = doc.at("occasion").get<std::string>();
-        req.vibe = doc.at("vibe").get<std::string>();
+
+        // one of each, already chosen by whoever is calling us - we used to
+        // take catalogs and a name to look up, which just undid the lookup
+        // they had already done
+        req.occasion = parseOccasion(doc.at("occasion"));
+        req.vibe = parseAesthetic(doc.at("vibe"));
 
         const json weather = doc.value("weather", json::object());
         req.weather.temp_c = weather.value("temp_c", req.weather.temp_c);
@@ -419,8 +433,6 @@ namespace engine
         req.limit = doc.value("limit", req.limit);
 
         req.closet = parseGarments(doc.at("closet"));
-        req.occasions = parseOccasions(doc.at("occasions"));
-        req.vibes = parseAesthetics(doc.at("vibes"));
 
         return req;
     }

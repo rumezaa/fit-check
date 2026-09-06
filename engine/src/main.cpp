@@ -8,7 +8,6 @@
 #include <algorithm>
 #include <chrono>
 #include <exception>
-#include <format>
 #include <iostream>
 #include <random>
 #include <string>
@@ -110,21 +109,6 @@ namespace
         return 1;
     }
 
-    // looks up one entry by name so a typo comes back as an error we can read
-    // rather than silently scoring against the wrong thing
-    template <typename T>
-    const T &find_named(const std::vector<T> &items, const std::string &name,
-                        const char *what)
-    {
-        const auto it = std::ranges::find(items, name, &T::name);
-        if (it == items.end())
-        {
-            throw std::runtime_error(
-                std::format("unknown {}: '{}'", what, name));
-        }
-        return *it;
-    }
-
 } // namespace
 
 int main()
@@ -141,9 +125,8 @@ int main()
 
     try
     {
-        const engine::Occasion &occasion =
-            find_named(req.occasions, req.occasion, "occasion");
-        const engine::Aesthetic &vibe = find_named(req.vibes, req.vibe, "vibe");
+        const engine::Occasion &occasion = req.occasion;
+        const engine::Aesthetic &vibe = req.vibe;
 
         // one clock read for the whole run so everything is measured against the same day
         const std::chrono::sys_days today =
