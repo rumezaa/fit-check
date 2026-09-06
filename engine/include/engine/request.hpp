@@ -17,8 +17,8 @@ namespace engine
     // in together so the binary has no hidden file dependencies
     struct Request
     {
-        std::string occasion;
-        std::string vibe;
+        Occasion occasion;
+        Aesthetic vibe;
         Weather weather;
 
         // leave empty and we seed off the clock, set it and the same request
@@ -29,8 +29,6 @@ namespace engine
         std::size_t limit = 5;
 
         std::vector<Garment> closet;
-        std::vector<Occasion> occasions;
-        std::vector<Aesthetic> vibes;
     };
 
     // reads one request off a stream. throws on bad json or a missing key so
