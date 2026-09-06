@@ -2,9 +2,13 @@ import json
 import sys
 from pathlib import Path
 
-from .color import extract_dominant_lch, lch_to_hex
-from PIL import Image
+from PIL import Image, ImageOps
+from pillow_heif import register_heif_opener
 from rembg import remove
+
+from .color import extract_dominant_lch, lch_to_hex
+
+register_heif_opener()  # teaches Image.open to read iphone .heic photos
 
 DATA_DIR = Path(__file__).resolve().parent.parent / "data"
 CUTOUT_DIR = DATA_DIR / "cutouts"
@@ -16,7 +20,8 @@ def ingest(photo):
 
     Nothing is written to disk — call save_cutout once the user has confirmed.
     """
-    img = Image.open(photo).convert("RGB")
+    img = Image.open(photo)
+    img = ImageOps.exif_transpose(img).convert("RGB")  # honour phone orientation
     img.thumbnail((MAX_EDGE, MAX_EDGE))  # shrinks only; preserves aspect ratio
 
     cutout = remove(img)
