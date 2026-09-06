@@ -7,6 +7,7 @@ pydantic
 # ingestion
 rembg
 pillow
+pillow-heif        # iphone .heic photos
 numpy
 scikit-image
 scikit-learn
