@@ -18,8 +18,24 @@ namespace engine
         bool require_clean = true;
     };
 
-    // gets garments that match the occasion
-    bool matches(const Garment &garment, const Occasion &occasion);
+    // warmth lives here not on Occasion - the same picnic wants linen in july and a parka in january
+    struct Weather
+    {
+        float temp_c = 18.0f;
+    };
+
+    // the warmth values we can wear at some temp - a band not one number so theres more than one right answer
+    struct WarmthRange
+    {
+        int min = 1;
+        int max = 5;
+    };
+
+    WarmthRange warmth_for(const Weather &weather);
+
+    // gets garments that match the occasion in this weather
+    bool matches(const Garment &garment, const Occasion &occasion,
+                 const Weather &weather);
 
     struct Candidates
     {
@@ -33,6 +49,6 @@ namespace engine
     };
 
     Candidates filter_closet(const std::vector<Garment> &closet,
-                             const Occasion &occasion);
+                             const Occasion &occasion, const Weather &weather);
 
 }
