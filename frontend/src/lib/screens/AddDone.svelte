@@ -20,7 +20,8 @@
     <div class="meta">
       <h2>{latest?.name ?? 'your piece'}</h2>
       <p class="px-7 count">ITEM {app.garments.length} IN YOUR CLOSET</p>
-      {#each [['TYPE', latest?.category], ['FABRIC', latest?.fabric], ['LENGTH', latest?.length]] as [k, v]}
+      {#each [['TYPE', latest?.category], ['FABRIC', latest?.fabric],
+              ['SHAPE', latest?.silhouette], ['LENGTH', latest?.length]] as [k, v]}
         {#if v && v !== 'NA'}
           <div class="kv chrome chrome--flat">
             <span class="px-7 k">{k}</span><span class="v">{v}</span>

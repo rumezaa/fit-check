@@ -3,8 +3,8 @@
   import { api } from '../api'
   import Dialogue from '../components/Dialogue.svelte'
   import StripFooter from '../components/StripFooter.svelte'
-  import { FABRICS, LENGTHS, PATTERNS, FORMALITIES } from '../types'
-  import type { Category, Fabric, Length, Pattern, Formality } from '../types'
+  import { FABRICS, LENGTHS, PATTERNS, FORMALITIES, SILHOUETTES } from '../types'
+  import type { Category, Fabric, Length, Pattern, Formality, Silhouette } from '../types'
 
   const STEPS = ['Photo', 'Details', 'Done']
   const d = app.draft
@@ -20,6 +20,10 @@
   let formality = $state<Formality>(pick(FORMALITIES, d?.formality, 'Casual'))
   let fabric    = $state<Fabric>(pick(FABRICS, d?.fabric, 'Cotton'))
   let pattern   = $state<Pattern>(pick(PATTERNS, d?.pattern, 'Solid'))
+  /* Shown as SHAPE, stored as `silhouette` — that is the column the DB has and
+     the key the engine's loader reads. Straight is the neutral value: the
+     volume table scores it 0 in every cell, so leaving it alone costs nothing. */
+  let silhouette = $state<Silhouette>(pick(SILHOUETTES, d?.silhouette, 'Straight'))
   let length    = $state<Length>(pick(LENGTHS, d?.length, 'NA' as Length))
   let busy      = $state(false)
 
@@ -37,7 +41,7 @@
     app.error = null
     try {
       await api.create(app.draft.draft_id, {
-        name: name.trim(), category, fabric, pattern, formality,
+        name: name.trim(), category, fabric, pattern, formality, silhouette,
         length: needsLength ? length : 'NA',
         color: (d?.color as any) ?? { l: 60, c: 20, h: 300 },
         hex: d?.hex ?? null,
@@ -102,6 +106,16 @@
       </div>
 
       <div class="row">
+        <span class="label px-7">SHAPE</span>
+        <div class="chips">
+          {#each SILHOUETTES as sil}
+            <button class="chip px-7" class:on={silhouette === sil}
+                    onclick={() => (silhouette = sil)}>{sil.toUpperCase()}</button>
+          {/each}
+        </div>
+      </div>
+
+      <div class="row">
         <span class="label px-7">PATTERN</span>
         <div class="chips">
           {#each PATTERNS as p}
@@ -144,7 +158,7 @@
           display: grid; place-items: center; color: var(--muted); }
   .shot img { max-width: 92%; max-height: 208px; object-fit: contain; }
 
-  .form { flex: 1; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+  .form { flex: 1; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
   .row { display: flex; align-items: center; gap: 8px; }
   /* kept in the DOM so the rows above never shift when type changes */
   .row.hidden { visibility: hidden; }
@@ -154,7 +168,7 @@
            background: var(--white); color: var(--ink); font-size: 9px; padding: 0 8px; }
 
   .chips { display: flex; flex-wrap: wrap; gap: 4px; }
-  .chip { padding: 6px 6px; background: var(--white); color: var(--ink);
+  .chip { padding: 4px 6px; background: var(--white); color: var(--ink);
           box-shadow: none; border-width: 1px; }
   .chip.on { background: var(--pink); color: var(--white); }
 
