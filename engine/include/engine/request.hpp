@@ -17,9 +17,16 @@ namespace engine
     // in together so the binary has no hidden file dependencies
     struct Request
     {
+        // both fall back to the open ended any_occasion / any_vibe when the
+        // request leaves them out, which is what styling around one piece does
         Occasion occasion;
         Aesthetic vibe;
         Weather weather;
+
+        // the piece the user wants styled around. empty means build a whole
+        // outfit off the occasion and vibe, set means they asked what goes with
+        // this one and every pair we hand back has to use it
+        std::optional<int> anchor_id;
 
         // leave empty and we seed off the clock, set it and the same request
         // gives back the same outfit every time

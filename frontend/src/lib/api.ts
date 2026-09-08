@@ -85,11 +85,30 @@ export const api = {
     return req<void>(`/saved-outfits/${id}`, { method: 'DELETE' })
   },
 
-  outfits(occasion: string, vibe: string, temp_c = 18, limit = 3, seed?: number) {
+  /* One endpoint answers both questions. Name an occasion and a vibe to build
+     an outfit; name an anchor_id to ask what goes with a piece you already
+     picked — the engine reads a missing key as "no opinion", so they are only
+     sent when set. */
+  outfits(opts: {
+    occasion?: string | null
+    vibe?: string | null
+    anchor_id?: number | null
+    temp_c?: number
+    limit?: number
+    seed?: number
+  }) {
+    const body: Record<string, unknown> = {
+      temp_c: opts.temp_c ?? 18,
+      limit: opts.limit ?? 3,
+    }
+    if (opts.occasion) body.occasion = opts.occasion
+    if (opts.vibe) body.vibe = opts.vibe
+    if (opts.anchor_id != null) body.anchor_id = opts.anchor_id
+    if (opts.seed != null) body.seed = opts.seed
     return req<OutfitResponse>('/outfits', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ occasion, vibe, temp_c, limit, seed }),
+      body: JSON.stringify(body),
     })
   },
 }

@@ -46,43 +46,56 @@ def to_engine_garment(row: dict) -> dict:
 
 def pick_outfits(
     garments: list[dict],
-    occasion: str,
-    vibe: str,
+    occasion: str | None = None,
+    vibe: str | None = None,
     temp_c: float = 18.0,
     seed: int | None = None,
     limit: int = 5,
+    anchor_id: int | None = None,
 ) -> dict:
-    """Run the engine over the closet. Returns its JSON, ok=False on failure."""
+    """Run the engine over the closet. Returns its JSON, ok=False on failure.
+
+    occasion and vibe are both optional: leaving them out asks the engine the
+    open ended question, which is what "what can I style this with?" is. That
+    one needs anchor_id, the garment every pair has to be built around.
+    """
     if not ENGINE.exists():
         return {"ok": False, "error": f"engine binary not built: {ENGINE}"}
 
     # we send the definitions themselves, not names to look up - the engine
     # used to search a catalog for the entry we had already picked out. that
     # means an unknown name is ours to report now
-    chosen_occasion = OCCASIONS.get(occasion)
-    if chosen_occasion is None:
-        return {
-            "ok": False,
-            "error": f"unknown occasion: {occasion!r}, expected one of {occasions()}",
-        }
+    payload: dict = {
+        "weather": {"temp_c": temp_c},
+        "seed": seed,
+        "limit": limit,
+        "closet": [to_engine_garment(g) for g in garments],
+    }
 
-    chosen_vibe = VIBES.get(vibe)
-    if chosen_vibe is None:
-        return {
-            "ok": False,
-            "error": f"unknown vibe: {vibe!r}, expected one of {vibes()}",
-        }
+    # a key we leave out is a question we are not asking - the engine reads a
+    # missing occasion or vibe as "no opinion", not as an empty one
+    if occasion is not None:
+        chosen_occasion = OCCASIONS.get(occasion)
+        if chosen_occasion is None:
+            return {
+                "ok": False,
+                "error": f"unknown occasion: {occasion!r}, expected one of {occasions()}",
+            }
+        payload["occasion"] = chosen_occasion
 
-    request = json.dumps(
-        {
-            "occasion": chosen_occasion,
-            "vibe": chosen_vibe,
-            "weather": {"temp_c": temp_c},
-            "seed": seed,
-            "limit": limit,
-            "closet": [to_engine_garment(g) for g in garments],
-        }
-    )
+    if vibe is not None:
+        chosen_vibe = VIBES.get(vibe)
+        if chosen_vibe is None:
+            return {
+                "ok": False,
+                "error": f"unknown vibe: {vibe!r}, expected one of {vibes()}",
+            }
+        payload["vibe"] = chosen_vibe
+
+    if anchor_id is not None:
+        payload["anchor_id"] = anchor_id
+
+    request = json.dumps(payload)
 
     # a hung engine would otherwise block the worker thread forever
     try:

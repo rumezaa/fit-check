@@ -18,10 +18,14 @@
   </div>
 </Modal>
 
-<button class="next px-12" onclick={() => app.go('aesthetic')}
-        disabled={!app.occasion}>NEXT &#9654;</button>
+<Dialogue text={app.occasion ? occasionLine(app.occasion) : WELCOME}>
+  {#snippet actions()}
+    <button class="dlg-btn" onclick={() => app.go('home')}>&#9664; Back</button>
+    <button class="dlg-btn" onclick={() => app.go('aesthetic')}
+            disabled={!app.occasion}>Next &#9654;</button>
+  {/snippet}
+</Dialogue>
 
-<Dialogue text={app.occasion ? occasionLine(app.occasion) : WELCOME} />
 <StripFooter items={STEPS} active="Occasion" />
 
 <style>
@@ -33,8 +37,4 @@
     box-shadow: none; border-width: 1px; padding: 0 4px;
   }
   .chip.on { background: var(--pink); color: var(--ink); }
-  .next {
-    position: absolute; left: 50%; transform: translateX(-50%); top: 284px;
-    width: 180px; height: 52px; background: var(--blue); color: var(--white);
-  }
 </style>

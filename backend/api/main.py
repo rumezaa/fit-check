@@ -32,8 +32,12 @@ class GarmentCreate(store.GarmentFields):
 
 
 class OutfitRequest(BaseModel):
-    occasion: str
-    vibe: str
+    # all three are optional so one endpoint answers both questions: name an
+    # occasion and a vibe to build an outfit, or name an anchor_id to ask what
+    # goes with a piece you already picked
+    occasion: str | None = None
+    vibe: str | None = None
+    anchor_id: int | None = None
     temp_c: float = 18.0
     seed: int | None = None
     limit: int = 5
@@ -102,6 +106,45 @@ def read_garment(garment_id: int):
     return row
 
 
+@app.delete("/garments/{garment_id}")
+def remove_garment(garment_id: int):
+    # take the cutout with the row; nothing else references it
+    row = store.get_garment(garment_id)
+    if row is None:
+        raise HTTPException(404, f"no garment with id {garment_id}")
+    if not store.delete_garment(garment_id):
+        raise HTTPException(404, f"no garment with id {garment_id}")
+    cutout = row.get("cutout_path")
+    if cutout:
+        path = CUTOUT_DIR.parent / cutout
+        path.unlink(missing_ok=True)
+    return {"id": garment_id, "deleted": True}
+
+
+@app.get("/saved-outfits")
+def list_saved_outfits():
+    return store.get_saved_outfits()
+
+
+@app.post("/saved-outfits")
+def create_saved_outfit(outfit: store.SavedOutfitIn):
+    # a look needs at least one real piece, or there is nothing to show later
+    if outfit.top_id is None and outfit.bottom_id is None:
+        raise HTTPException(400, "a saved outfit needs a top or a bottom")
+    for gid in (outfit.top_id, outfit.bottom_id):
+        if gid is not None and store.get_garment(gid) is None:
+            raise HTTPException(404, f"no garment with id {gid}")
+    new_id = store.post_saved_outfit(outfit)
+    return {"id": new_id, **outfit.model_dump()}
+
+
+@app.delete("/saved-outfits/{outfit_id}")
+def remove_saved_outfit(outfit_id: int):
+    if not store.delete_saved_outfit(outfit_id):
+        raise HTTPException(404, f"no saved outfit with id {outfit_id}")
+    return {"id": outfit_id, "deleted": True}
+
+
 @app.get("/options")
 def options():
     """Valid occasion and vibe names, for the pickers the user chooses from."""
@@ -110,8 +153,19 @@ def options():
 
 @app.post("/outfits")
 def pick(req: OutfitRequest):
+    # caught here rather than in the engine so the 404 names the garment the
+    # user tapped, instead of coming back as a generic bad request
+    if req.anchor_id is not None and store.get_garment(req.anchor_id) is None:
+        raise HTTPException(404, f"no garment with id {req.anchor_id}")
+
     result = pick_outfits(
-        store.get_garments(), req.occasion, req.vibe, req.temp_c, req.seed, req.limit
+        store.get_garments(),
+        req.occasion,
+        req.vibe,
+        req.temp_c,
+        req.seed,
+        req.limit,
+        req.anchor_id,
     )
     if not result.get("ok"):
         raise HTTPException(400, result.get("error", "engine failed"))

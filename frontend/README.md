@@ -41,7 +41,8 @@ src/
 
 | Section | Screens |
 |---|---|
-| Generate an outfit | Home → Occasion → Aesthetic → Confirm → Dressing → Your look |
+| Generate an outfit | Home → Occasion → Aesthetic (Generate) → **back to Home** with the fit loaded |
+| Try it on | Home → DRESS ME → Dressing → Your look |
 | Add a garment | Photo → Details → Added |
 | My closet | Closet (+ delete confirm) |
 | Saved outfits | My outfits |
@@ -50,10 +51,26 @@ src/
 
 - **Tops and bottoms only.** The engine ranks top+bottom pairs; shoes are
   filtered as candidates but never paired.
-- **The wand locks a rack.** With a piece locked, `generate()` keeps it and only
-  moves the other rack. Browsing is disabled on a locked rack.
+- **Generating returns you to the racks**, not to a results screen. The fit
+  loads into TOPS/BOTTOMS and the shuffle button (circular arrows, beside the
+  heart) pages through the three the engine returned. DRESS ME is the only way
+  into the try-on screens.
+- **Every enumeration comes from the engine**, never from the UI: occasions and
+  aesthetics via `GET /options` (backed by `engine/fixtures/*.json`), and
+  formality / fabric / length / pattern from the tables in
+  `engine/src/loader.cpp`, mirrored in `types.ts`.
+- **The wand locks a rack and styles around it.** Tapping USE THIS sends
+  `anchor_id` to `/outfits`; the engine then guarantees every pair it returns
+  uses that piece. Occasion and vibe are *optional* on this path — omitting a
+  key makes the engine fall back to `any_occasion()` / `any_vibe()`, which is
+  the open-ended "what goes with this?" question. Whatever is already selected
+  still narrows it. Browsing is disabled on a locked rack; tapping the lit wand
+  releases it without regenerating.
 - **Length is a hemline**, so it only shows for bottoms. Tops must send `"NA"` —
   the engine rejects anything else.
+- **The occasion strip is a setter, not a trigger.** Tapping an occasion in the
+  footer lights it and sets `app.occasion`; only GENERATE runs the engine. It is
+  display-only on the Closet and Saved screens.
 - **Laundry items stay in the closet but leave the racks** (`clean = false`).
 - Every `Category`/`Fabric`/`Length` union in `types.ts` must match
   `engine/src/loader.cpp` exactly; the engine throws on unknown values.
@@ -65,7 +82,8 @@ src/
 | load closet / options / saved | `GET /garments`, `GET /options`, `GET /saved-outfits` |
 | add a garment | `POST /garments/ingest` then `POST /garments` |
 | delete a garment | `DELETE /garments/{id}` |
-| GENERATE | `POST /outfits` (spawns the C++ engine) |
+| GENERATE | `POST /outfits` with `occasion` + `vibe` |
+| USE THIS (wand) | `POST /outfits` with `anchor_id` — same endpoint |
 | save a look | `POST /saved-outfits` |
 | mark worn | `PATCH /garments/{id}/last-worn` |
 

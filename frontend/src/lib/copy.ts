@@ -42,20 +42,19 @@ const VIBE_LINES: Record<string, string> = {
 /** Shown on the vibe step before anything is picked. */
 export const VIBE_PROMPT = "So... what vibe are we going for??"
 
+/** Same prompt, but carrying the occasion through from the previous step. */
+export function vibePrompt(occasion: string): string {
+  return occasion ? `Cute!! ${occasion}! What's the vibe??` : VIBE_PROMPT
+}
+
 /** Shown the moment a vibe is chosen, so the picker reacts to the tap. */
 export function vibeLine(vibe: string, occasion = ''): string {
-  if (!vibe) return VIBE_PROMPT
+  if (!vibe) return vibePrompt(occasion)
   const line = VIBE_LINES[norm(vibe)]
   if (line) return line
   return occasion
     ? `${vibe} for ${occasion.toLowerCase()}?? Great pick.`
     : `${vibe}?? Great pick.`
-}
-
-/** Shown on the confirm step, once both are chosen. */
-export function confirmLine(occasion: string, vibe: string): string {
-  if (!occasion || !vibe) return "Pick a vibe and I'll put something together!!"
-  return `Amazing!! Let's build you a ${vibe} look for ${occasion.toLowerCase()}.`
 }
 
 /** The very first prompt, before anything is chosen. */

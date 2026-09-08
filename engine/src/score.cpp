@@ -55,6 +55,12 @@ namespace
     constexpr float SHAPE_HIT = 15.0f;
     constexpr float SHAPE_MISS = -10.0f;
 
+    // what one step outside the occasions formality band costs. graded rather
+    // than pass/fail because the filter now hands us pieces that miss the dress
+    // code when the closet held nothing that met it - jeans at a date night
+    // still have to be ranked against each other
+    constexpr float FORMALITY_STRETCH = 30.0f;
+
     constexpr float LO_SCORE_RANGE = -50.0f;
     constexpr float HI_SCORE_RANGE = 50.0f;
 
@@ -82,6 +88,24 @@ namespace
             return 1;
         case Formality::Elegant:
             return 2;
+        }
+        return 0;
+    }
+
+    // how many rungs a piece sits outside the occasions band, 0 when it fits
+    int formality_gap(Formality f, const Occasion &occ)
+    {
+        const int rank = rank_formality(f);
+        const int lo = rank_formality(occ.min_formality);
+        const int hi = rank_formality(occ.max_formality);
+
+        if (rank < lo)
+        {
+            return lo - rank;
+        }
+        if (rank > hi)
+        {
+            return rank - hi;
         }
         return 0;
     }
@@ -235,28 +259,13 @@ namespace
             consistency = CLASH;
         }
 
-        // find if they fit the occasions range
-        float fit;
-        int top_rank = rank_formality(top.formality);
-        int bott_rank = rank_formality(bottom.formality);
-        int occ_min = rank_formality(occ.min_formality);
-        int occ_max = rank_formality(occ.max_formality);
-
-        bool top_fit = (occ_min <= top_rank) && (top_rank <= occ_max);
-        bool bott_fit = (occ_min <= bott_rank) && (bott_rank <= occ_max);
-
-        if (top_fit && bott_fit)
-        {
-            fit = GREAT;
-        }
-        else if (top_fit || bott_fit)
-        {
-            fit = OKAY;
-        }
-        else
-        {
-            fit = CLASH;
-        }
+        // find how far they sit from the occasions range. a pair inside it
+        // still scores GREAT and one step out still scores OKAY, the same as
+        // when this was a yes/no - the steps past that are new, so a top thats
+        // one rung under the dress code beats one thats two
+        const int gap = formality_gap(top.formality, occ) +
+                        formality_gap(bottom.formality, occ);
+        const float fit = std::max(CLASH, GREAT - FORMALITY_STRETCH * gap);
 
         return (consistency + fit) / 2;
     }

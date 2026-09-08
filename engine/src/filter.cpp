@@ -1,5 +1,7 @@
 #include <engine/filter.hpp>
 
+#include <array>
+
 namespace engine
 {
 
@@ -25,17 +27,10 @@ namespace engine
         return {4, 5};
     }
 
-    bool matches(const Garment &garment, const Occasion &occasion,
-                 const Weather &weather)
+    bool wearable(const Garment &garment, const Occasion &occasion,
+                  const Weather &weather)
     {
         if (occasion.require_clean && !garment.clean)
-        {
-            return false;
-        }
-
-        // Formality is ordered, so a range check is just two comparisons.
-        if (garment.formality < occasion.min_formality ||
-            garment.formality > occasion.max_formality)
         {
             return false;
         }
@@ -50,6 +45,25 @@ namespace engine
         return true;
     }
 
+    bool fits_formality(const Garment &garment, const Occasion &occasion)
+    {
+        // Formality is ordered, so a range check is just two comparisons.
+        return garment.formality >= occasion.min_formality &&
+               garment.formality <= occasion.max_formality;
+    }
+
+    bool matches(const Garment &garment, const Occasion &occasion,
+                 const Weather &weather)
+    {
+        return wearable(garment, occasion, weather) &&
+               fits_formality(garment, occasion);
+    }
+
+    bool Relaxed::any() const
+    {
+        return tops || bottoms || shoes;
+    }
+
     // check if we have all aspects of our outfit ready
     bool Candidates::complete() const
     {
@@ -61,11 +75,35 @@ namespace engine
         return tops.size() + bottoms.size() + shoes.size();
     }
 
+    namespace
+    {
+        // one rail of the closet, so the two passes below can walk all three
+        // without writing the same switch twice
+        struct Rail
+        {
+            Category category;
+            std::vector<Garment> *items;
+            bool *relaxed;
+        };
+
+        std::array<Rail, 3> rails_of(Candidates &candidates)
+        {
+            return {
+                Rail{Category::Top, &candidates.tops, &candidates.relaxed.tops},
+                Rail{Category::Bottom, &candidates.bottoms,
+                     &candidates.relaxed.bottoms},
+                Rail{Category::Shoes, &candidates.shoes,
+                     &candidates.relaxed.shoes},
+            };
+        }
+    } // namespace
+
     // building possible combinations that pass our criteria
     Candidates filter_closet(const std::vector<Garment> &closet,
                              const Occasion &occasion, const Weather &weather)
     {
         Candidates candidates;
+        const std::array<Rail, 3> rails = rails_of(candidates);
 
         for (const Garment &garment : closet)
         {
@@ -88,7 +126,48 @@ namespace engine
             }
         }
 
+        // an empty rail means the dress code asked for something we dont own.
+        // date night wants business up, and if all we have is jeans then jeans
+        // is the answer - we would rather hand back a stretched outfit than
+        // nothing at all, so we refill that one rail ignoring formality and let
+        // score_pair charge for the gap.
+        //
+        // only the empty rail bends. a closet with one business skirt in it
+        // still gets the skirt, not the jeans sitting next to it
+        for (const Rail &rail : rails)
+        {
+            if (!rail.items->empty())
+            {
+                continue;
+            }
+
+            for (const Garment &garment : closet)
+            {
+                if (garment.category != rail.category ||
+                    !wearable(garment, occasion, weather))
+                {
+                    continue;
+                }
+                rail.items->push_back(garment);
+            }
+
+            // still empty means clean or warmth emptied it, not the dress code
+            *rail.relaxed = !rail.items->empty();
+        }
+
         return candidates;
+    }
+
+    const Garment *find_garment(const std::vector<Garment> &closet, int id)
+    {
+        for (const Garment &garment : closet)
+        {
+            if (garment.id == id)
+            {
+                return &garment;
+            }
+        }
+        return nullptr;
     }
 
 }

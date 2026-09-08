@@ -133,6 +133,28 @@ button:disabled {
 }
 button:focus-visible { outline: 3px solid var(--pink); outline-offset: 2px; }
 
+/* ---- buttons that live inside the dialogue bar ------------------- */
+.dlg-btn {
+  min-width: 195px; height: 28px; padding: 0 12px;
+  background: var(--blue); color: var(--white);
+  font-family: var(--pixel); font-size: 8px; line-height: 1;
+  border: 2px solid var(--black);
+  box-shadow: inset 2px 2px 0 rgba(255, 255, 255, 0.5),
+              inset -2px -2px 0 var(--bevel-dark);
+}
+/* the primary action wears the print */
+.dlg-btn--leopard {
+  /* multiply against a deep purple so the print darkens enough for white
+     text to hold — the raw leopard is too light to read against */
+  background-color: #5b3a86;
+  background-image: url('/bg/leopard.png');
+  background-size: 140px;
+  background-blend-mode: multiply;
+  color: var(--white);
+  text-shadow: 1px 1px 0 var(--black), -1px -1px 0 var(--black),
+               1px -1px 0 var(--black), -1px 1px 0 var(--black);
+}
+
 /* ---- backgrounds ------------------------------------------------ */
 /* Drop the exported Figma artwork into public/bg/ to replace the fallbacks. */
 .bg-leopard {

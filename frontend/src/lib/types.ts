@@ -82,6 +82,9 @@ export interface RankedPair {
 export interface OutfitResponse {
   ok: boolean
   error?: string
+  /** "anchored" when the request named a piece to style around. */
+  mode?: 'outfit' | 'anchored'
+  anchor?: { id: number; name: string; hex: string; category: Category } | null
   occasion: string
   vibe: string
   weather: { temp_c: number; warmth_min: number; warmth_max: number }
