@@ -1,47 +1,81 @@
-# Svelte + TS + Vite
+# fit-check — frontend
 
-This template should help get you started developing with Svelte and TypeScript in Vite.
+The kiosk UI. Svelte 5 + Vite + TypeScript, built for a **Raspberry Pi 7"
+touch display at 800×480, landscape**.
 
-## Recommended IDE Setup
+## Run
 
-[VS Code](https://code.visualstudio.com/) + [Svelte](https://marketplace.visualstudio.com/items?itemName=svelte.svelte-vscode).
+```bash
+# terminal 1 — the API (from the repo root)
+backend/.venv/bin/uvicorn backend.api.main:app --port 8000
 
-## Need an official Svelte framework?
-
-Check out [SvelteKit](https://github.com/sveltejs/kit#readme), which is also powered by Vite. Deploy anywhere with its serverless-first approach and adapt to various platforms, with out of the box support for TypeScript, SCSS, and Less, and easily-added support for mdsvex, GraphQL, PostCSS, Tailwind CSS, and more.
-
-## Technical considerations
-
-**Why use this over SvelteKit?**
-
-- It brings its own routing solution which might not be preferable for some users.
-- It is first and foremost a framework that just happens to use Vite under the hood, not a Vite app.
-
-This template contains as little as possible to get started with Vite + TypeScript + Svelte, while taking into account the developer experience with regards to HMR and intellisense. It demonstrates capabilities on par with the other `create-vite` templates and is a good starting point for beginners dipping their toes into a Vite + Svelte project.
-
-Should you later need the extended capabilities and extensibility provided by SvelteKit, the template has been structured similarly to SvelteKit so that it is easy to migrate.
-
-**Why `global.d.ts` instead of `compilerOptions.types` inside `jsconfig.json` or `tsconfig.json`?**
-
-Setting `compilerOptions.types` shuts out all other types not explicitly listed in the configuration. Using triple-slash references keeps the default TypeScript setting of accepting type information from the entire workspace, while also adding `svelte` and `vite/client` type information.
-
-**Why include `.vscode/extensions.json`?**
-
-Other templates indirectly recommend extensions via the README, but this file allows VS Code to prompt the user to install the recommended extension upon opening the project.
-
-**Why enable `allowJs` in the TS template?**
-
-While `allowJs: false` would indeed prevent the use of `.js` files in the project, it does not prevent the use of JavaScript syntax in `.svelte` files. In addition, it would force `checkJs: false`, bringing the worst of both worlds: not being able to guarantee the entire codebase is TypeScript, and also having worse typechecking for the existing JavaScript. In addition, there are valid use cases in which a mixed codebase may be relevant.
-
-**Why is HMR not preserving my local component state?**
-
-HMR state preservation comes with a number of gotchas! It has been disabled by default in both `svelte-hmr` and `@sveltejs/vite-plugin-svelte` due to its often surprising behavior. You can read the details [here](https://github.com/rixo/svelte-hmr#svelte-hmr).
-
-If you have state that's important to retain within a component, consider creating an external store which would not be replaced by HMR.
-
-```ts
-// store.ts
-// An extremely simple external store
-import { writable } from 'svelte/store'
-export default writable(0)
+# terminal 2 — the UI
+cd frontend && npm run dev      # http://localhost:5173
 ```
+
+Vite proxies `/garments`, `/outfits`, `/options`, `/cutouts` and `/drafts` to
+`127.0.0.1:8000`, so every fetch is origin-relative and the built bundle works
+unchanged when the Pi serves it from behind the API.
+
+`npm run check` type-checks. `npm run build` emits `dist/`.
+
+## Layout
+
+The panel is exactly 800×480 and the design is pixel-placed, so `App.svelte`
+scales the whole stage to fit the window rather than reflowing. On the Pi that
+scale is 1:1.
+
+```
+src/
+  app.css                 design tokens, Win95 bevel chrome, backgrounds
+  lib/
+    types.ts              mirrors backend/db/store.py + the engine's enums
+    api.ts                typed client, one place that knows about HTTP
+    icons.ts              pixel-art bitmaps -> merged SVG paths
+    state.svelte.ts       app state (runes), screen routing, engine calls
+    components/           Rack, Dialogue, Modal, StripFooter, Wireframe, …
+    screens/              one file per screen in the Figma flows
+```
+
+## Flows
+
+| Section | Screens |
+|---|---|
+| Generate an outfit | Home → Occasion → Aesthetic → Confirm → Dressing → Your look |
+| Add a garment | Photo → Details → Added |
+| My closet | Closet (+ delete confirm) |
+| Saved outfits | My outfits |
+
+### Rules worth knowing
+
+- **Tops and bottoms only.** The engine ranks top+bottom pairs; shoes are
+  filtered as candidates but never paired.
+- **The wand locks a rack.** With a piece locked, `generate()` keeps it and only
+  moves the other rack. Browsing is disabled on a locked rack.
+- **Length is a hemline**, so it only shows for bottoms. Tops must send `"NA"` —
+  the engine rejects anything else.
+- **Laundry items stay in the closet but leave the racks** (`clean = false`).
+- Every `Category`/`Fabric`/`Length` union in `types.ts` must match
+  `engine/src/loader.cpp` exactly; the engine throws on unknown values.
+
+## Endpoints used
+
+| call | endpoint |
+|---|---|
+| load closet / options / saved | `GET /garments`, `GET /options`, `GET /saved-outfits` |
+| add a garment | `POST /garments/ingest` then `POST /garments` |
+| delete a garment | `DELETE /garments/{id}` |
+| GENERATE | `POST /outfits` (spawns the C++ engine) |
+| save a look | `POST /saved-outfits` |
+| mark worn | `PATCH /garments/{id}/last-worn` |
+
+Anything the frontend fetches must also be listed in `vite.config.ts`'s proxy,
+or the dev server answers with `index.html` and the JSON parse fails.
+
+## Known gaps
+
+- **The laundry button has no endpoint** — toggling `clean` needs a PATCH on
+  the garment. The UI shows a notice instead of pretending it worked.
+- `public/bg/avatar.png` has no alpha channel, which is why the helper portrait
+  is framed in a box. A cut-out with transparency would allow the full-bleed
+  avatar from the Figma mockups.
