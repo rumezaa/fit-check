@@ -17,6 +17,7 @@ namespace
     using engine::PaletteTarget;
     using engine::ShapeTarget;
     using engine::Pattern;
+    using engine::Silhouette;
     using engine::ScoreRes;
 
     // ---- tunable constants ----
@@ -54,6 +55,10 @@ namespace
     // each dimension the vibe cares about pays out or costs, so matching all three beats matching one
     constexpr float SHAPE_HIT = 15.0f;
     constexpr float SHAPE_MISS = -10.0f;
+
+    // proportion, scored on the pair rather than against the vibe
+    constexpr float BALANCED = 15.0f; // volume answered by restraint
+    constexpr float STACKED = -15.0f; // volume on volume, no waist left to read
 
     // what one step outside the occasions formality band costs. graded rather
     // than pass/fail because the filter now hands us pieces that miss the dress
@@ -167,6 +172,30 @@ namespace
                                                                   : SHAPE_MISS;
     }
 
+    // how two silhouettes read together, with no vibe involved. proportion is a
+    // relationship, not a property - the same oversized tee reads deliberate
+    // over fitted trousers and shapeless over baggy cargos - so this is the one
+    // shape term that has to look at both pieces at once
+    //
+    // its not a volume scale collapsed into a number. flowy on flowy is fine
+    // and oversized on oversized isnt, even though both stack volume, so the
+    // pairs are spelled out
+    //
+    // Straight stays neutral in every cell on purpose. its the value a garment
+    // gets when nobody has said otherwise, so it must never invent an opinion
+    constexpr std::array<std::array<float, 4>, 4> kVolume{{
+        //             Fitted     Straight  Flowy      Oversized
+        /* Fitted */ {{0.0f, 0.0f, BALANCED, BALANCED}},
+        /* Straight */ {{0.0f, 0.0f, 0.0f, 0.0f}},
+        /* Flowy */ {{BALANCED, 0.0f, 0.0f, STACKED}},
+        /* Oversized */ {{BALANCED, 0.0f, STACKED, STACKED}},
+    }};
+
+    float volume_balance(Silhouette top, Silhouette bottom)
+    {
+        return kVolume[static_cast<std::size_t>(top)][static_cast<std::size_t>(bottom)];
+    }
+
     float rank_shape_fit(const Garment &g, const ShapeTarget &target)
     {
         float score = shape_axis(target.silhouettes, g.silhouette) +
@@ -181,10 +210,18 @@ namespace
         return map_range(score);
     }
 
+    // two questions in one axis: does each piece suit the vibe, and do the two
+    // sit right next to each other. conformance is averaged so it stays on the
+    // same scale as before, then proportion nudges it - a vibe that asked for a
+    // silhouette still wins, but it no longer picks blind between a pair that
+    // balances and one that doesnt
     float score_shape(const Garment &top, const Garment &bottom,
                       const ShapeTarget &target)
     {
-        return (rank_shape_fit(top, target) + rank_shape_fit(bottom, target)) / 2;
+        const float fit =
+            (rank_shape_fit(top, target) + rank_shape_fit(bottom, target)) / 2;
+
+        return map_range(fit + volume_balance(top.silhouette, bottom.silhouette));
     }
 
     // using lch scale gives us a more dim look on complementary color using degree dist. in hues and l and c
