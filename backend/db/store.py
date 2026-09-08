@@ -1,7 +1,7 @@
 import sqlite3
 from contextlib import closing
 from pathlib import Path
-from datetime import date
+from datetime import date, datetime
 from typing import Literal
 
 from pydantic import BaseModel, Field
@@ -73,6 +73,17 @@ def init_db():
         for column in ("fabric", "silhouette", "length"):
             if column not in cols:
                 c.execute(f"ALTER TABLE wardrobe ADD COLUMN {column} TEXT")
+        # saved_outfits arrived after the first databases did
+        c.execute(
+            """CREATE TABLE IF NOT EXISTS saved_outfits (
+                   id         INTEGER PRIMARY KEY AUTOINCREMENT,
+                   top_id     INTEGER REFERENCES wardrobe(id) ON DELETE CASCADE,
+                   bottom_id  INTEGER REFERENCES wardrobe(id) ON DELETE CASCADE,
+                   occasion   TEXT NOT NULL,
+                   vibe       TEXT NOT NULL,
+                   created_at TEXT NOT NULL
+               )"""
+        )
 
 
 def post_garment(g: GarmentIn) -> int:
@@ -127,4 +138,51 @@ def update_garment(garment_id: int, last_worn: str) -> bool:
 def delete_garment(garment_id: int) -> bool:
     with closing(_conn()) as c, c:
         cur = c.execute("DELETE FROM wardrobe WHERE id = ?", (garment_id,))
+        return cur.rowcount > 0
+
+
+class SavedOutfitIn(BaseModel):
+    """A look the user kept: the pair the engine produced, plus why."""
+
+    top_id: int | None = None
+    bottom_id: int | None = None
+    occasion: str
+    vibe: str
+
+
+def post_saved_outfit(o: SavedOutfitIn) -> int:
+    with closing(_conn()) as c, c:
+        cur = c.execute(
+            """INSERT INTO saved_outfits (top_id, bottom_id, occasion, vibe, created_at)
+               VALUES (?,?,?,?,?)""",
+            (o.top_id, o.bottom_id, o.occasion, o.vibe, datetime.now().isoformat()),
+        )
+        return cur.lastrowid
+
+
+def get_saved_outfits() -> list[dict]:
+    """Newest first, with each garment inlined so the UI needs one call."""
+    with closing(_conn()) as c, c:
+        rows = c.execute(
+            "SELECT * FROM saved_outfits ORDER BY id DESC"
+        ).fetchall()
+        out = []
+        for r in rows:
+            look = dict(r)
+            for side in ("top", "bottom"):
+                gid = look[f"{side}_id"]
+                g = None
+                if gid is not None:
+                    row = c.execute(
+                        "SELECT * FROM wardrobe WHERE id = ?", (gid,)
+                    ).fetchone()
+                    g = dict(row) if row else None
+                look[side] = g
+            out.append(look)
+        return out
+
+
+def delete_saved_outfit(outfit_id: int) -> bool:
+    with closing(_conn()) as c, c:
+        cur = c.execute("DELETE FROM saved_outfits WHERE id = ?", (outfit_id,))
         return cur.rowcount > 0

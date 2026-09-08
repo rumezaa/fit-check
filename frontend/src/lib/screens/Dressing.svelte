@@ -4,14 +4,11 @@
   import Wireframe from '../components/Wireframe.svelte'
   import MeshGrid from '../components/MeshGrid.svelte'
 
-  /* Reached from DRESS ME (show me wearing this) and from GENERATE (pick for
-     me). If nothing has been generated yet we run the engine on the way in. */
+  /* Reached from DRESS ME only — it renders whatever is currently on the
+     racks. Generating is a separate action that never comes through here. */
   onMount(() => {
-    if (app.hasLooks) {
-      const t = setTimeout(() => app.go('look'), 1500)
-      return () => clearTimeout(t)
-    }
-    app.generate()
+    const t = setTimeout(() => app.go('look'), 1500)
+    return () => clearTimeout(t)
   })
 </script>
 

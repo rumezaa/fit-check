@@ -17,3 +17,11 @@ CREATE TABLE IF NOT EXISTS wardrobe (
     last_worn   TEXT,
     cutout_path TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS saved_outfits (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    top_id     INTEGER REFERENCES wardrobe(id) ON DELETE CASCADE,
+    bottom_id  INTEGER REFERENCES wardrobe(id) ON DELETE CASCADE,
+    occasion   TEXT NOT NULL,
+    vibe       TEXT NOT NULL,
+    created_at TEXT NOT NULL
+);

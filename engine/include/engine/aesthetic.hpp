@@ -40,4 +40,14 @@ namespace engine
         PaletteTarget palette;
         ShapeTarget shape;
     };
+
+    // what we score with when the user didnt pick a vibe - every target is left
+    // wide open and palette carries no weight, so a piece is judged on how it
+    // sits next to its partner and nothing else
+    inline Aesthetic any_vibe()
+    {
+        Aesthetic a;
+        a.name = "Anything";
+        return a;
+    }
 }

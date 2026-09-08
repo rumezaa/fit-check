@@ -33,7 +33,6 @@
     {#if app.screen === 'home'}          <Home />
     {:else if app.screen === 'occasion'} <OccasionPicker />
     {:else if app.screen === 'aesthetic'}<AestheticPicker />
-    {:else if app.screen === 'confirm'}  <AestheticPicker confirm />
     {:else if app.screen === 'dressing'} <Dressing />
     {:else if app.screen === 'look'}     <YourLook />
     {:else if app.screen === 'add-photo'}  <AddPhoto />

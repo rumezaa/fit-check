@@ -3,7 +3,7 @@ import type { Draft, GarmentRow, RankedPair, SavedOutfit } from './types'
 import { isClean } from './types'
 
 export type Screen =
-  | 'home' | 'occasion' | 'aesthetic' | 'confirm' | 'dressing' | 'look'
+  | 'home' | 'occasion' | 'aesthetic' | 'dressing' | 'look'
   | 'add-photo' | 'add-details' | 'add-done'
   | 'closet' | 'saved'
 
@@ -29,6 +29,8 @@ class AppState {
   locked = $state<Locked>(null)
 
   looks = $state<RankedPair[]>([])
+  /** Set when the last run was anchored — the engine echoes the piece back. */
+  anchor = $state<{ id: number; name: string; category: string } | null>(null)
   lookIndex = $state(0)
 
   saved = $state<SavedOutfit[]>([])
@@ -91,15 +93,41 @@ class AppState {
   /** The wand: lock this piece, or release it if it was already locked. */
   toggleLock(category: 'Top' | 'Bottom') {
     this.locked = this.locked === category ? null : category
+    if (!this.locked) this.anchor = null
   }
 
+  /** The whole outfit: needs an occasion and a vibe. */
   async generate() {
     if (!this.occasion || !this.vibe) { this.go('occasion'); return }
+    await this.run({ occasion: this.occasion, vibe: this.vibe })
+  }
+
+  /** The wand: style around the locked piece. Occasion and vibe are optional
+      here — the engine answers the open-ended "what goes with this?". */
+  async styleAround() {
+    const piece = this.locked === 'Top' ? this.currentTop
+                : this.locked === 'Bottom' ? this.currentBottom : null
+    if (!piece) { this.flash('Lock a piece first with USE THIS'); return }
+    await this.run({
+      anchor_id: piece.id,
+      // whatever is already chosen still narrows it; neither is required
+      occasion: this.occasion || undefined,
+      vibe: this.vibe || undefined,
+    })
+  }
+
+  private async run(opts: {
+    occasion?: string; vibe?: string; anchor_id?: number
+  }) {
     this.loading = true
-    this.go('dressing')
     try {
-      const res = await api.outfits(this.occasion, this.vibe, 18, 3)
+      const res = await api.outfits({ ...opts, limit: 3 })
       this.looks = res.ranked ?? []
+      // trust the engine's echo rather than our own lock — they agree, but this
+      // is the side that actually decided
+      this.anchor = res.anchor
+        ? { id: res.anchor.id, name: res.anchor.name, category: res.anchor.category }
+        : null
       this.lookIndex = 0
       if (!this.looks.length) {
         // "nothing to wear" is an answer, not a failure. Say which shelf came
@@ -108,13 +136,20 @@ class AppState {
         const n = (v: number, w: string) => `${v} ${w}${v === 1 ? '' : 's'}`
         // go() clears `error`, so it has to be set *after* the navigation
         this.go('home')
-        this.error =
-          `Nothing works for ${this.occasion} yet — only ${n(c.tops, 'top')} ` +
-          `and ${n(c.bottoms, 'bottom')} qualify. Add pieces or pick another occasion.`
+        this.error = opts.anchor_id != null
+          ? `Nothing in the closet pairs with that piece yet — ` +
+            `${n(c.tops, 'top')} and ${n(c.bottoms, 'bottom')} to work with.`
+          : `Nothing works for ${this.occasion} yet — only ${n(c.tops, 'top')} ` +
+            `and ${n(c.bottoms, 'bottom')} qualify. Add pieces or pick another occasion.`
         return
       }
+      // the generated fit loads onto the racks; DRESS ME is what takes you
+      // to the try-on screens from here
       this.applyLook(0)
-      this.go('look')
+      this.go('home')
+      this.flash(opts.anchor_id != null
+        ? `${this.looks.length} ways to wear that piece — shuffle to see them`
+        : `${this.looks.length} looks ready — shuffle to see them`)
     } catch (e) {
       this.go('home')
       this.fail(e)     // after go(), which resets error

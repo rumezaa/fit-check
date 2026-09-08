@@ -8,8 +8,10 @@
 #include <algorithm>
 #include <chrono>
 #include <exception>
+#include <format>
 #include <iostream>
 #include <random>
+#include <span>
 #include <string>
 #include <vector>
 
@@ -32,18 +34,21 @@ namespace
         const engine::Garment *bottom = nullptr;
     };
 
-    std::vector<RankedPair> rank_pairs(const engine::Candidates &candidates,
+    // spans not Candidates so styling around one piece can pass that piece as a
+    // rail of one and reuse the same loop
+    std::vector<RankedPair> rank_pairs(std::span<const engine::Garment> tops,
+                                       std::span<const engine::Garment> bottoms,
                                        const engine::Occasion &occasion,
                                        const engine::Aesthetic &vibe,
                                        std::chrono::sys_days today)
     {
         std::vector<RankedPair> sorted_ranked_pairs;
-        sorted_ranked_pairs.reserve(candidates.tops.size() * candidates.bottoms.size());
+        sorted_ranked_pairs.reserve(tops.size() * bottoms.size());
 
         // we take the cartesian products and get the score
-        for (const engine::Garment &top : candidates.tops)
+        for (const engine::Garment &top : tops)
         {
-            for (const engine::Garment &bottom : candidates.bottoms)
+            for (const engine::Garment &bottom : bottoms)
             {
                 RankedPair pair;
                 pair.score = engine::score_pair(top, bottom, occasion, vibe, today);
@@ -84,6 +89,20 @@ namespace
         return json{{"id", g.id}, {"name", g.name}, {"hex", g.hex}};
     }
 
+    const char *category_name(engine::Category c)
+    {
+        switch (c)
+        {
+        case engine::Category::Top:
+            return "Top";
+        case engine::Category::Bottom:
+            return "Bottom";
+        case engine::Category::Shoes:
+            return "Shoes";
+        }
+        return "Top";
+    }
+
     // we keep the per axis breakdown in the payload on purpose - the total
     // alone doesnt tell us which constant to fix when a pairing looks wrong
     json pair_json(const RankedPair &pair, std::size_t rank)
@@ -93,12 +112,7 @@ namespace
             {"total", pair.total},
             {"top", garment_json(*pair.top)},
             {"bottom", garment_json(*pair.bottom)},
-            {"scores", {{"color", pair.score.color},
-                        {"formality", pair.score.formality},
-                        {"pattern", pair.score.pattern},
-                        {"palette", pair.score.palette},
-                        {"recency", pair.score.recency},
-                        {"shape", pair.score.shape}}}};
+            {"scores", {{"color", pair.score.color}, {"formality", pair.score.formality}, {"pattern", pair.score.pattern}, {"palette", pair.score.palette}, {"recency", pair.score.recency}, {"shape", pair.score.shape}}}};
     }
 
     // every exit goes through here so whoever is reading our stdout always
@@ -132,24 +146,47 @@ int main()
         const std::chrono::sys_days today =
             std::chrono::floor<std::chrono::days>(std::chrono::system_clock::now());
 
+        // the anchor is the piece the user asked us to style around. we resolve
+        // it before filtering because it is exempt from the filter - they can
+        // see it in their closet and they picked it, so telling them its too
+        // warm for today or needs a wash would just be refusing the question
+        const engine::Garment *anchor = nullptr;
+        if (req.anchor_id)
+        {
+            anchor = engine::find_garment(req.closet, *req.anchor_id);
+            if (anchor == nullptr)
+            {
+                return fail(std::format("no garment with id {} in the closet",
+                                        *req.anchor_id));
+            }
+            if (anchor->category == engine::Category::Shoes)
+            {
+                return fail("can only style around a top or a bottom");
+            }
+        }
+
         const engine::Candidates candidates =
             engine::filter_closet(req.closet, occasion, req.weather);
         const engine::WarmthRange warmth = engine::warmth_for(req.weather);
 
-        const std::vector<RankedPair> sorted_ranked_pairs =
-            rank_pairs(candidates, occasion, vibe, today);
+        // anchored, one side of every pair is fixed, so we hand that side in as
+        // a rail of one and let the other side come off the filtered closet
+        const std::span<const engine::Garment> anchor_rail{anchor, anchor ? 1u : 0u};
+        const bool anchored_top = anchor && anchor->category == engine::Category::Top;
+
+        const std::vector<RankedPair> sorted_ranked_pairs = rank_pairs(
+            anchored_top ? anchor_rail : std::span<const engine::Garment>{candidates.tops},
+            anchor && !anchored_top ? anchor_rail : std::span<const engine::Garment>{candidates.bottoms},
+            occasion, vibe, today);
 
         json out{
             {"ok", true},
+            {"mode", anchor ? "anchored" : "outfit"},
+            {"anchor", anchor ? json{{"id", anchor->id}, {"name", anchor->name}, {"hex", anchor->hex}, {"category", category_name(anchor->category)}} : json(nullptr)},
             {"occasion", occasion.name},
             {"vibe", vibe.name},
-            {"weather", {{"temp_c", req.weather.temp_c},
-                         {"warmth_min", warmth.min},
-                         {"warmth_max", warmth.max}}},
-            {"candidates", {{"tops", candidates.tops.size()},
-                            {"bottoms", candidates.bottoms.size()},
-                            {"shoes", candidates.shoes.size()},
-                            {"complete", candidates.complete()}}},
+            {"weather", {{"temp_c", req.weather.temp_c}, {"warmth_min", warmth.min}, {"warmth_max", warmth.max}}},
+            {"candidates", {{"tops", candidates.tops.size()}, {"bottoms", candidates.bottoms.size()}, {"shoes", candidates.shoes.size()}, {"complete", candidates.complete()}, {"relaxed_formality", {{"tops", candidates.relaxed.tops}, {"bottoms", candidates.relaxed.bottoms}, {"shoes", candidates.relaxed.shoes}, {"any", candidates.relaxed.any()}}}}},
             {"pairs_scored", sorted_ranked_pairs.size()},
         };
 

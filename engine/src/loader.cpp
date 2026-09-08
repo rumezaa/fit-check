@@ -420,13 +420,26 @@ namespace engine
         // one of each, already chosen by whoever is calling us - we used to
         // take catalogs and a name to look up, which just undid the lookup
         // they had already done
-        req.occasion = parseOccasion(doc.at("occasion"));
-        req.vibe = parseAesthetic(doc.at("vibe"));
+        //
+        // both are optional now. asking what goes with one piece means naming
+        // no occasion and no vibe, and the open ended pair below is what that
+        // question scores against
+        const auto has = [&doc](const char *key)
+        { return doc.contains(key) && !doc.at(key).is_null(); };
+
+        req.occasion = has("occasion") ? parseOccasion(doc.at("occasion"))
+                                       : any_occasion();
+        req.vibe = has("vibe") ? parseAesthetic(doc.at("vibe")) : any_vibe();
+
+        if (has("anchor_id"))
+        {
+            req.anchor_id = doc.at("anchor_id").get<int>();
+        }
 
         const json weather = doc.value("weather", json::object());
         req.weather.temp_c = weather.value("temp_c", req.weather.temp_c);
 
-        if (doc.contains("seed") && !doc.at("seed").is_null())
+        if (has("seed"))
         {
             req.seed = doc.at("seed").get<std::uint32_t>();
         }
