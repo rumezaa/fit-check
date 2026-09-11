@@ -5,7 +5,7 @@ python-multipart   # required for UploadFile / multipart form parsing
 pydantic
 
 # ingestion
-rembg
+rembg[cpu]         # the bare package ships no onnx backend
 pillow
 pillow-heif        # iphone .heic photos
 numpy
