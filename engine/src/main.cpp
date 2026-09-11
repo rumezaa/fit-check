@@ -22,7 +22,11 @@ namespace
 
     // pool we pick from - small enough a bad outfit never shows up, big enough
     // that we dont get the same answer every run
-    constexpr std::size_t kPoolSize = 7;
+    //
+    // whoever is driving us should ask for this many, so the set we sample the
+    // opener out of is the same set they can page through. a pool wider than
+    // the shortlist just means sampling something the user cant get back to
+    constexpr std::size_t kPoolSize = 5;
 
     // a scored combo plus the pieces that made it so we can name them when
     // printing - the pointers borrow from Candidates which outlives them
@@ -203,8 +207,14 @@ int main()
         const std::size_t picked = select(sorted_ranked_pairs, rng);
         out["pick"] = pair_json(sorted_ranked_pairs[picked], picked + 1);
 
+        // the pool we sample from runs deeper than limit, so a shortlist cut
+        // at limit would leave whoever reads pick holding a pair that isnt in
+        // the list we handed them. we extend far enough to reach it instead of
+        // reordering, so ranked stays in rank order either way
+        const std::size_t shortlist = std::max(req.limit, picked + 1);
+
         json ranked = json::array();
-        for (std::size_t i = 0; i < sorted_ranked_pairs.size() && i < req.limit; ++i)
+        for (std::size_t i = 0; i < sorted_ranked_pairs.size() && i < shortlist; ++i)
         {
             ranked.push_back(pair_json(sorted_ranked_pairs[i], i + 1));
         }

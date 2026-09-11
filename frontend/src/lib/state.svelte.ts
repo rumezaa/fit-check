@@ -121,7 +121,7 @@ class AppState {
   }) {
     this.loading = true
     try {
-      const res = await api.outfits({ ...opts, limit: 3 })
+      const res = await api.outfits(opts)
       this.looks = res.ranked ?? []
       // trust the engine's echo rather than our own lock — they agree, but this
       // is the side that actually decided
@@ -144,8 +144,15 @@ class AppState {
         return
       }
       // the generated fit loads onto the racks; DRESS ME is what takes you
-      // to the try-on screens from here
-      this.applyLook(0)
+      // to the try-on screens from here.
+      //
+      // we open on the engine's pick, not on rank 1. it samples that from the
+      // top of the list rather than always taking the best score, which is the
+      // only reason the same closet and occasion dont hand back the same outfit
+      // every time. the shortlist is guaranteed to contain it
+      const pick = res.pick
+      const start = pick ? this.looks.findIndex((l) => l.rank === pick.rank) : -1
+      this.applyLook(start < 0 ? 0 : start)
       this.go('home')
       this.flash(opts.anchor_id != null
         ? `${this.looks.length} ways to wear that piece — shuffle to see them`
