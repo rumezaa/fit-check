@@ -37,6 +37,10 @@ async function req<T>(path: string, init?: RequestInit): Promise<T> {
   }
 }
 
+/** How many looks a run hands back. Matches kPoolSize in the engine, so the set
+    it samples the opening look from is exactly the set refresh can cycle. */
+export const LOOKS_PER_RUN = 5
+
 export const api = {
   options: () => req<Options>('/options'),
 
@@ -99,7 +103,7 @@ export const api = {
   }) {
     const body: Record<string, unknown> = {
       temp_c: opts.temp_c ?? 18,
-      limit: opts.limit ?? 3,
+      limit: opts.limit ?? LOOKS_PER_RUN,
     }
     if (opts.occasion) body.occasion = opts.occasion
     if (opts.vibe) body.vibe = opts.vibe
