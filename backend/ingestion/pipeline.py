@@ -1,10 +1,11 @@
 import json
 import sys
+from functools import lru_cache
 from pathlib import Path
 
 from PIL import Image, ImageOps
 from pillow_heif import register_heif_opener
-from rembg import remove
+from rembg import new_session, remove
 
 from .color import extract_dominant_lch, lch_to_hex
 
@@ -12,7 +13,23 @@ register_heif_opener()  # teaches Image.open to read iphone .heic photos
 
 DATA_DIR = Path(__file__).resolve().parent.parent / "data"
 CUTOUT_DIR = DATA_DIR / "cutouts"
-MAX_EDGE = 2000  # cutouts are ~6x smaller at this cap, with no meaningful color shift
+MODEL = "u2netp"  # 4.6MB, against the 1GB bria-rmbg rembg now defaults to
+WORK_EDGE = 1536  # below ~1024 the dominant colour drifts light (dL +7 at 768):
+# downsampling blends a garment's dark folds into their lighter neighbours, and
+# the cluster extract_dominant_lch settles on moves with them.
+CUTOUT_EDGE = 768  # display only, and nothing renders above 200px
+
+
+@lru_cache(maxsize=1)
+def _session():
+    """Built once and reused.
+
+    remove() with no session= builds a fresh ONNX session per call, and that
+    rebuild is most of the cost of a photo. Lazy rather than module-level so
+    that importing this file never reaches for the network - the model is
+    fetched and cached on the first ingest.
+    """
+    return new_session(MODEL)
 
 
 def ingest(photo):
@@ -22,10 +39,13 @@ def ingest(photo):
     """
     img = Image.open(photo)
     img = ImageOps.exif_transpose(img).convert("RGB")  # honour phone orientation
-    img.thumbnail((MAX_EDGE, MAX_EDGE))  # shrinks only; preserves aspect ratio
+    img.thumbnail((WORK_EDGE, WORK_EDGE))  # shrinks only; preserves aspect ratio
 
-    cutout = remove(img)
-    lch = extract_dominant_lch(cutout)
+    # post_process_mask cleans up the background u2netp leaves haloed around
+    # shoulders and shadows; it costs ~40ms and shrinks the png
+    cutout = remove(img, session=_session(), post_process_mask=True)
+    lch = extract_dominant_lch(cutout)  # read the colour before shrinking
+    cutout.thumbnail((CUTOUT_EDGE, CUTOUT_EDGE))
 
     draft = {
         "color": {"l": lch.l, "c": lch.c, "h": lch.h},
