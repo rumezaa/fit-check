@@ -10,7 +10,10 @@
 
 set -euo pipefail
 
-ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# -P so ROOT is the real path: conductor renames a workspace by symlinking the
+# new name at the old directory, and `git worktree list` only ever answers with
+# the physical one, so a logical $ROOT would match none of its rows
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 CACHE="${XDG_CACHE_HOME:-$HOME/.cache}/fit-check"
 
 API_BASE=8000
@@ -77,7 +80,7 @@ port_free() { ! lsof -nP -iTCP:"$1" -sTCP:LISTEN >/dev/null 2>&1; }
 # git answers with a path relative to the worktree when we are standing in the
 # primary checkout and an absolute one from a linked worktree, so resolve it
 # from $ROOT either way
-PRIMARY="$(cd "$ROOT" && cd "$(git rev-parse --git-common-dir)/.." && pwd)"
+PRIMARY="$(cd "$ROOT" && cd "$(git rev-parse --git-common-dir)/.." && pwd -P)"
 
 # path<TAB>branch for every worktree, primary first
 worktrees() {
