@@ -65,10 +65,27 @@ export interface EngineGarment {
   name: string
   category: Category
   hex?: string
+  /* what the piece is, so a stretched look can say which half missed the code */
+  formality?: Formality
   fabric?: Fabric
   length?: Length
   [k: string]: unknown
 }
+
+/** Which parts of a look the engine had to bend the dress code to fill.
+    `anchor` is the styled-around piece itself — it comes in exempt from the
+    filter, so when it misses the code that is a stretch nothing else records.
+    `shoes` is reported but never rendered: shoes are filtered, not paired. */
+export interface Relaxed {
+  tops: boolean
+  bottoms: boolean
+  shoes: boolean
+  anchor: boolean
+  any: boolean
+}
+
+/** The formality band the occasion asked for, which the flags above bent. */
+export interface DressCode { min: Formality; max: Formality }
 
 /** The engine pairs a top with a bottom — shoes are filtered but not paired. */
 export interface RankedPair {
@@ -84,12 +101,23 @@ export interface OutfitResponse {
   error?: string
   /** "anchored" when the request named a piece to style around. */
   mode?: 'outfit' | 'anchored'
-  anchor?: { id: number; name: string; hex: string; category: Category } | null
+  anchor?: {
+    id: number; name: string; hex: string
+    category: Category; formality: Formality
+  } | null
   occasion: string
+  /** The band `occasion` stands for — what relaxed_formality was bent away from. */
+  dress_code: DressCode
   vibe: string
   weather: { temp_c: number; warmth_min: number; warmth_max: number }
-  candidates: { tops: number; bottoms: number; shoes: number; complete: boolean }
+  candidates: {
+    tops: number; bottoms: number; shoes: number; complete: boolean
+    relaxed_formality: Relaxed
+  }
   pairs_scored: number
+  /** Pairs `pairs_scored` counted that the colour floor then removed. The gap
+      between "nothing in your closet fit" and "none of it went together". */
+  dropped_on_color: number
   pick: RankedPair | null
   ranked: RankedPair[]
 }
