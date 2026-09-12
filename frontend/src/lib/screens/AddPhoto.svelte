@@ -5,7 +5,11 @@
   import StripFooter from '../components/StripFooter.svelte'
   import PixelIcon from '../components/PixelIcon.svelte'
 
-  const STEPS = ['Photo', 'Details', 'Done']
+  /* Shared by both paths through the camera: adding a piece to the closet, and
+     asking whether a piece in a shop is worth buying. The steps are identical
+     up to the point where one saves and the other doesn't. */
+  const tryOn = $derived(app.intent === 'try-on')
+  const STEPS = $derived(['Photo', 'Details', tryOn ? 'Verdict' : 'Done'])
   let file: HTMLInputElement
   let busy = $state(false)
 
@@ -36,7 +40,7 @@
   <div class="vhead px-8"><span>CAMERA</span><span>&#9679; LIVE</span></div>
   <div class="bracket tl"></div><div class="bracket tr"></div>
   <div class="bracket bl"></div><div class="bracket br"></div>
-  <div class="ghost px-7">LAY IT FLAT</div>
+  <div class="ghost px-7">{tryOn ? 'BYE OR BUY?' : 'LAY IT FLAT'}</div>
   <p class="hint">fill the frame &middot; plain background</p>
 </div>
 
@@ -49,7 +53,9 @@
 <input bind:this={file} type="file" accept="image/*" capture="environment"
        onchange={upload} hidden />
 
-<Dialogue text="Take a picture of the piece you want to add. Put it on a solid, well-lit background." />
+<Dialogue text={tryOn
+  ? "Show me the thing you're eyeing!! A photo off the shop page works too."
+  : "Take a picture of the piece you want to add. Put it on a solid, well-lit background."} />
 <StripFooter items={STEPS} active="Photo" />
 
 <style>

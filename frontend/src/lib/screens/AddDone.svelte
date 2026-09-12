@@ -32,7 +32,7 @@
   </div>
 </div>
 
-<button class="btn add px-10" onclick={() => { app.draft = null; app.go('add-photo') }}>
+<button class="btn add px-10" onclick={() => app.startAdd('closet')}>
   &#10010;  ADD ANOTHER
 </button>
 <button class="btn done px-9" onclick={() => { app.draft = null; app.go('home') }}>

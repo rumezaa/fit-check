@@ -9,6 +9,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from ..bridge.ingest_engine import occasions, pick_outfits, vibes
+from ..bridge.verdict import try_on
 from ..db import store
 from ..ingestion.pipeline import CUTOUT_DIR, ingest, save_cutout
 
@@ -41,6 +42,20 @@ class OutfitRequest(BaseModel):
     temp_c: float = 18.0
     seed: int | None = None
     limit: int = 5
+
+
+class TryOnRequest(store.GarmentFields):
+    """A piece the user is thinking about buying, described the same way a
+    garment is — it just never reaches the database unless they buy it.
+
+    occasion and vibe stay optional here for the same reason they are on
+    OutfitRequest: "does this go with my closet" is a fair question to ask
+    without naming either one.
+    """
+
+    occasion: str | None = None
+    vibe: str | None = None
+    temp_c: float = 18.0
 
 
 class LastWornUpdate(BaseModel):
@@ -143,6 +158,27 @@ def remove_saved_outfit(outfit_id: int):
     if not store.delete_saved_outfit(outfit_id):
         raise HTTPException(404, f"no saved outfit with id {outfit_id}")
     return {"id": outfit_id, "deleted": True}
+
+
+@app.post("/try-on")
+def bye_or_buy(req: TryOnRequest):
+    """Bye or buy: score a piece the user found online against their closet.
+
+    Nothing is written. The cutout it was described from stays a draft, so
+    buying it afterwards is the ordinary POST /garments with the same draft_id.
+    """
+    # the engine can only style around a top or a bottom, and a shoe reaching it
+    # would come back as a generic bad request instead of naming what went wrong
+    if req.category == "Shoes":
+        raise HTTPException(400, "bye or buy only works on tops and bottoms")
+
+    fields = req.model_dump(exclude={"occasion", "vibe", "temp_c"})
+    result = try_on(
+        store.get_garments(), fields, req.occasion, req.vibe, req.temp_c
+    )
+    if not result.get("ok"):
+        raise HTTPException(400, result.get("error", "engine failed"))
+    return result
 
 
 @app.get("/options")

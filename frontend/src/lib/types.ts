@@ -90,11 +90,53 @@ export interface OutfitResponse {
   weather: { temp_c: number; warmth_min: number; warmth_max: number }
   candidates: { tops: number; bottoms: number; shoes: number; complete: boolean }
   pairs_scored: number
+  /** Null when nothing could be paired at all. */
+  totals: Totals | null
   pick: RankedPair | null
   ranked: RankedPair[]
 }
 
+/** The spread of every pair a run scored, not just the ones it handed back.
+    A total only means something next to the closet that produced it. */
+export interface Totals {
+  count: number
+  best: number
+  p75: number
+  median: number
+  worst: number
+}
+
 export interface Options { occasions: string[]; vibes: string[] }
+
+/** Bye or buy: how one pairing with the candidate placed against `baseline`. */
+export type Tier = 'standout' | 'works' | 'weak' | 'unrated'
+
+export interface Pairing {
+  total: number
+  tier: Tier
+  scores: Record<string, number>
+  /** The piece from the closet — the candidate side is the same every time. */
+  garment: GarmentRow
+}
+
+export interface TryOnResponse {
+  ok: boolean
+  verdict: 'buy' | 'maybe' | 'bye'
+  category: Category
+  /** The rail it was tried against: a top is judged on bottoms and vice versa. */
+  pairs_with: Category
+  tried: number
+  works: number
+  standouts: number
+  /** False when the closet cannot put an outfit together on its own, which
+      leaves nothing to measure the candidate against. */
+  closet_can_dress: boolean
+  occasion: string
+  vibe: string
+  baseline: Totals | null
+  candidate_totals: Totals | null
+  pairings: Pairing[]
+}
 
 /** A look kept by the user. The server inlines both garments. */
 export interface SavedOutfit {

@@ -1,14 +1,22 @@
 import { api, ApiError } from './api'
-import type { Draft, GarmentRow, RankedPair, SavedOutfit } from './types'
+import type {
+  Draft, GarmentFields, GarmentRow, RankedPair, SavedOutfit, TryOnResponse,
+} from './types'
 import { isClean } from './types'
 
 export type Screen =
   | 'home' | 'occasion' | 'aesthetic' | 'dressing' | 'look'
   | 'add-photo' | 'add-details' | 'add-done'
+  | 'bye-or-buy'
   | 'closet' | 'saved'
 
 /** The rack the wand has locked: that piece stays, the other is styled around it. */
 export type Locked = 'Top' | 'Bottom' | null
+
+/** Why we are photographing something. The photo and details steps are the
+    same either way — only what happens at the end of them differs: `closet`
+    adds the piece, `try-on` asks whether it is worth buying and adds nothing. */
+export type Intent = 'closet' | 'try-on'
 
 function shelf(rows: GarmentRow[], category: 'Top' | 'Bottom') {
   // in-the-wash items stay in the closet but never reach the racks
@@ -35,6 +43,16 @@ class AppState {
 
   saved = $state<SavedOutfit[]>([])
   draft = $state<Draft | null>(null)
+  intent = $state<Intent>('closet')
+
+  /* Bye or buy. The candidate is held here rather than in the closet — it is
+     not something the user owns, and it only becomes a garment if they say
+     they bought it. Keeping the fields lets the verdict be re-run against a
+     different occasion without walking the form again. */
+  candidate = $state<GarmentFields | null>(null)
+  verdict = $state<TryOnResponse | null>(null)
+  /** Which occasion the verdict was measured under; '' is the open question. */
+  verdictOccasion = $state<string>('')
 
   loading = $state(false)
   error = $state<string | null>(null)
@@ -198,6 +216,61 @@ class AppState {
       this.saved = await api.savedOutfits()
       this.flash('Saved to your outfits!')
     } catch (e) { this.fail(e) }
+  }
+
+  /* ---- bye or buy ------------------------------------------------------ */
+
+  /** Start either path through the photo → details steps. */
+  startAdd(intent: Intent) {
+    this.intent = intent
+    this.draft = null
+    this.candidate = null
+    this.verdict = null
+    this.verdictOccasion = ''
+    this.go('add-photo')
+  }
+
+  /** Ask the engine what the closet can do with a piece we don't own. */
+  async checkCandidate(fields: GarmentFields) {
+    this.candidate = fields
+    await this.runVerdict()
+  }
+
+  /** Re-ask under one occasion — '' goes back to the open-ended question. */
+  async recheck(occasion: string) {
+    if (!this.candidate) return
+    this.verdictOccasion = occasion
+    await this.runVerdict()
+  }
+
+  private async runVerdict() {
+    if (!this.candidate) return
+    this.loading = true
+    try {
+      // no vibe on purpose: "does this go with my closet" is a fair question to
+      // ask before "does it suit fairycore", and a vibe the user picked for some
+      // other outfit has no business deciding what they buy
+      this.verdict = await api.tryOn(this.candidate, {
+        occasion: this.verdictOccasion || undefined,
+      })
+      this.go('bye-or-buy')
+    } catch (e) {
+      this.go('bye-or-buy')
+      this.fail(e)     // after go(), which resets error
+    } finally { this.loading = false }
+  }
+
+  /** They bought it. The draft is still held server-side, so this is the same
+      confirm step the add-to-closet path ends on. */
+  async keepCandidate() {
+    if (!this.draft || !this.candidate) return
+    this.loading = true
+    try {
+      await api.create(this.draft.draft_id, this.candidate)
+      await this.load()
+      this.intent = 'closet'
+      this.go('add-done')
+    } catch (e) { this.fail(e) } finally { this.loading = false }
   }
 
   async deleteSavedLook(id: number) {

@@ -4,9 +4,15 @@
   import Dialogue from '../components/Dialogue.svelte'
   import StripFooter from '../components/StripFooter.svelte'
   import { FABRICS, LENGTHS, PATTERNS, FORMALITIES, SILHOUETTES } from '../types'
-  import type { Category, Fabric, Length, Pattern, Formality, Silhouette } from '../types'
+  import type {
+    Category, Fabric, GarmentFields, Length, Pattern, Formality, Silhouette,
+  } from '../types'
 
-  const STEPS = ['Photo', 'Details', 'Done']
+  /* The same form serves both paths — the engine needs the same answers either
+     way. Only the last button differs: one saves the piece, the other asks
+     whether it is worth buying and saves nothing. */
+  const tryOn = $derived(app.intent === 'try-on')
+  const STEPS = $derived(['Photo', 'Details', tryOn ? 'Verdict' : 'Done'])
   const d = app.draft
 
   /* The ingest step *guesses* these from the photo, but a guess outside the
@@ -35,19 +41,27 @@
 
   $effect(() => { if (!needsLength) length = 'NA' })
 
-  async function save() {
+  const fields = (): GarmentFields => ({
+    name: name.trim(), category, fabric, pattern, formality, silhouette,
+    length: needsLength ? length : 'NA',
+    color: (d?.color as any) ?? { l: 60, c: 20, h: 300 },
+    hex: d?.hex ?? null,
+  })
+
+  async function submit() {
     if (!app.draft || !canSave) return
     busy = true
     app.error = null
     try {
-      await api.create(app.draft.draft_id, {
-        name: name.trim(), category, fabric, pattern, formality, silhouette,
-        length: needsLength ? length : 'NA',
-        color: (d?.color as any) ?? { l: 60, c: 20, h: 300 },
-        hex: d?.hex ?? null,
-      })
-      await app.load()
-      app.go('add-done')
+      if (tryOn) {
+        // the draft is deliberately left where it is — nothing is bought yet,
+        // and the verdict screen still needs the cut-out to show them
+        await app.checkCandidate(fields())
+      } else {
+        await api.create(app.draft.draft_id, fields())
+        await app.load()
+        app.go('add-done')
+      }
     } catch (err) {
       app.error = err instanceof Error ? err.message : String(err)
     } finally { busy = false }
@@ -139,13 +153,15 @@
 </div>
 
 <button class="btn back px-9" onclick={() => app.go('add-photo')}>&#9664; BACK</button>
-<button class="btn go px-9" onclick={save} disabled={!canSave}>
-  {busy ? 'SAVING...' : 'SAVE'}
+<button class="btn go px-9" onclick={submit} disabled={!canSave}>
+  {#if busy}{tryOn ? 'CHECKING...' : 'SAVING...'}{:else}{tryOn ? 'BYE OR BUY?' : 'SAVE'}{/if}
 </button>
 
-<Dialogue text={needsLength
-  ? "Cute!! What is it, what's it made of, and how long??"
-  : "Cute!! What is it, and what's it made of??"} />
+<Dialogue text={tryOn
+  ? "Tell me about it and I'll see what it goes with!!"
+  : needsLength
+    ? "Cute!! What is it, what's it made of, and how long??"
+    : "Cute!! What is it, and what's it made of??"} />
 <StripFooter items={STEPS} active="Details" />
 
 <style>

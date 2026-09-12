@@ -2,6 +2,8 @@
    but the mockups use a few others (gym, party, brunch…), so match on a
    normalised key and fall back to something that still reads naturally. */
 
+import type { TryOnResponse } from './types'
+
 const LINES: Record<string, string> = {
   'errands':             "Errands?? Okay — cute but comfy!!",
   'class':               "Class!! Let's look like you did the reading.",
@@ -59,3 +61,53 @@ export function vibeLine(vibe: string, occasion = ''): string {
 
 /** The very first prompt, before anything is chosen. */
 export const WELCOME = "Welcome to the outfit generator!! First — where are we going??"
+
+/* ---- bye or buy --------------------------------------------------------- */
+
+/** The headline. Binary in spirit, three-way in practice — a piece that works
+    with a couple of things and nothing else is neither a yes nor a no, and
+    rounding it to one would be the part the user can't act on. */
+export const VERDICT_HEAD = {
+  buy:   'BUY IT!!',
+  maybe: 'MAYBE...',
+  bye:   'BYE!!',
+} as const
+
+const RAIL = { Top: 'tops', Bottom: 'bottoms', Shoes: 'shoes' } as const
+
+/** The line that shows the working: which counts produced that verdict. */
+export function verdictReason(r: TryOnResponse): string {
+  const rail = RAIL[r.pairs_with]
+  if (!r.tried) return `You don't own any ${rail} to wear it with yet.`
+
+  if (!r.closet_can_dress) {
+    // nothing to measure against, so the only honest thing to report is what
+    // it unlocks — which is every one of these, because right now none of
+    // them have anything to pair with
+    return `You can't build a full outfit right now. This would make ${r.tried} possible.`
+  }
+
+  if (!r.works) {
+    return `None of your ${r.tried} ${rail} go with it better than what you already wear.`
+  }
+
+  const goes = `Goes with ${r.works} of your ${r.tried} ${rail}`
+  return r.standouts
+    ? `${goes} — ${r.standouts} as well as your best outfits.`
+    : `${goes}, though none of them beat your best outfits.`
+}
+
+/** Cher's take on the same answer. */
+export function verdictLine(r: TryOnResponse): string {
+  if (!r.tried) {
+    return `Babe, I need ${RAIL[r.pairs_with]} in that closet before I can call this one!!`
+  }
+  if (!r.closet_can_dress) {
+    return "Buy it!! Right now you can't make a single full outfit — this fixes that."
+  }
+  if (r.verdict === 'buy') return "BUY IT. That's going to work with so much of your closet!!"
+  if (r.verdict === 'maybe') {
+    return "Hmm!! It works, but only with a few things. Do you love it enough??"
+  }
+  return "Bye!! You've got nothing that goes with it. Save your money, babe."
+}

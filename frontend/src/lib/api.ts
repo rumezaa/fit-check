@@ -1,5 +1,6 @@
 import type {
   Draft, GarmentFields, GarmentRow, Options, OutfitResponse, SavedOutfit,
+  TryOnResponse,
 } from './types'
 
 export class ApiError extends Error {
@@ -69,6 +70,23 @@ export const api = {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ last_worn }),
+    })
+  },
+
+  /* Bye or buy: score a piece the user is thinking about buying against the
+     closet without adding it. Nothing is written, so the same draft can still
+     be confirmed through create() afterwards if the answer is buy. Leaving
+     occasion and vibe out asks the general question. */
+  tryOn(fields: GarmentFields, opts: {
+    occasion?: string | null; vibe?: string | null; temp_c?: number
+  } = {}) {
+    const body: Record<string, unknown> = { ...fields, temp_c: opts.temp_c ?? 18 }
+    if (opts.occasion) body.occasion = opts.occasion
+    if (opts.vibe) body.vibe = opts.vibe
+    return req<TryOnResponse>('/try-on', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
     })
   },
 

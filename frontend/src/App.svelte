@@ -10,6 +10,7 @@
   import AddPhoto from './lib/screens/AddPhoto.svelte'
   import AddDetails from './lib/screens/AddDetails.svelte'
   import AddDone from './lib/screens/AddDone.svelte'
+  import ByeOrBuy from './lib/screens/ByeOrBuy.svelte'
   import Closet from './lib/screens/Closet.svelte'
   import Saved from './lib/screens/Saved.svelte'
 
@@ -38,6 +39,7 @@
     {:else if app.screen === 'add-photo'}  <AddPhoto />
     {:else if app.screen === 'add-details'}<AddDetails />
     {:else if app.screen === 'add-done'}   <AddDone />
+    {:else if app.screen === 'bye-or-buy'} <ByeOrBuy />
     {:else if app.screen === 'closet'}   <Closet />
     {:else if app.screen === 'saved'}    <Saved />
     {/if}

@@ -119,6 +119,32 @@ namespace
             {"scores", {{"color", pair.score.color}, {"formality", pair.score.formality}, {"pattern", pair.score.pattern}, {"palette", pair.score.palette}, {"recency", pair.score.recency}, {"shape", pair.score.shape}}}};
     }
 
+    // the spread of every pair we scored, not just the ones we hand back.
+    //
+    // a shortlist cant answer "is this score any good" - the totals are
+    // weighted by the vibe, so the same number means different things under
+    // different vibes and different closets. a closets own spread is the one
+    // yardstick that travels, and we already have the sorted vector here, so
+    // quoting it exactly costs nothing where recomputing it from a truncated
+    // list would be wrong
+    json totals_json(const std::vector<RankedPair> &sorted_ranked_pairs)
+    {
+        // sorted best first, so the nth percentile sits (1 - n) of the way in
+        const auto quantile = [&sorted_ranked_pairs](double top_fraction)
+        {
+            const std::size_t last = sorted_ranked_pairs.size() - 1;
+            return sorted_ranked_pairs[static_cast<std::size_t>(top_fraction * last)].total;
+        };
+
+        return json{
+            {"count", sorted_ranked_pairs.size()},
+            {"best", sorted_ranked_pairs.front().total},
+            {"p75", quantile(0.25)},
+            {"median", quantile(0.5)},
+            {"worst", sorted_ranked_pairs.back().total},
+        };
+    }
+
     // every exit goes through here so whoever is reading our stdout always
     // gets json back, never a bare message
     int fail(const std::string &message)
@@ -192,6 +218,8 @@ int main()
             {"weather", {{"temp_c", req.weather.temp_c}, {"warmth_min", warmth.min}, {"warmth_max", warmth.max}}},
             {"candidates", {{"tops", candidates.tops.size()}, {"bottoms", candidates.bottoms.size()}, {"shoes", candidates.shoes.size()}, {"complete", candidates.complete()}, {"relaxed_formality", {{"tops", candidates.relaxed.tops}, {"bottoms", candidates.relaxed.bottoms}, {"shoes", candidates.relaxed.shoes}, {"any", candidates.relaxed.any()}}}}},
             {"pairs_scored", sorted_ranked_pairs.size()},
+            {"totals", sorted_ranked_pairs.empty() ? json(nullptr)
+                                                   : totals_json(sorted_ranked_pairs)},
         };
 
         if (sorted_ranked_pairs.empty())

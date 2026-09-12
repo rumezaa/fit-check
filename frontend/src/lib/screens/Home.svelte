@@ -12,7 +12,7 @@
   <span class="px-7">CLOSET</span>
 </button>
 
-<button class="corner add" onclick={() => app.go('add-photo')}>
+<button class="corner add" onclick={() => app.startAdd('closet')}>
   <PixelIcon name="camera" size={46} />
   <span class="px-7">ADD</span>
 </button>
@@ -45,6 +45,12 @@
         }}
         onlaundry={() => app.flash('Laundry needs a backend route')} />
 </div>
+
+<!-- the third verb on this screen: DRESS ME wears the closet, GENERATE fills
+     it in, this one asks whether something outside it is worth owning -->
+<button class="byebuy px-12" onclick={() => app.startAdd('try-on')}>
+  BYE OR BUY?
+</button>
 
 {#if app.anchor}
   <div class="anchored chrome">
@@ -86,6 +92,10 @@
   .rack-b :global(.transport) { top: 396px; }
   :global(.pane)      { top: 0px; }
   :global(.transport) { top: 176px; }
+  .byebuy {
+    position: absolute; left: 54px; top: 196px; width: 220px; height: 68px;
+    background: var(--dark); color: var(--white);
+  }
   .anchored {
     position: absolute; left: 54px; top: 286px; width: 220px; height: 72px;
     background: var(--pink); color: var(--white);

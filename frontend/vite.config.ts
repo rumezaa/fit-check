@@ -13,6 +13,7 @@ export default defineConfig({
     proxy: {
       '/garments': api,
       '/outfits': api,
+      '/try-on': api,
       '/saved-outfits': api,
       '/options': api,
       '/cutouts': api,
