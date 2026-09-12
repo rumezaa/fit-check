@@ -11,8 +11,9 @@ from .color import extract_dominant_lch, lch_to_hex
 
 register_heif_opener()  # teaches Image.open to read iphone .heic photos
 
-DATA_DIR = Path(__file__).resolve().parent.parent / "data"
-CUTOUT_DIR = DATA_DIR / "cutouts"
+# re-exported: api.main imports CUTOUT_DIR from here, and both point outside
+# the checkout so a wardrobe is not per-branch. see backend/paths.py
+from ..paths import CUTOUT_DIR, DATA_DIR
 MODEL = "u2netp"  # 4.6MB, against the 1GB bria-rmbg rembg now defaults to
 WORK_EDGE = 1536  # below ~1024 the dominant colour drifts light (dL +7 at 768):
 # downsampling blends a garment's dark folds into their lighter neighbours, and
