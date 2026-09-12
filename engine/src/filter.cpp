@@ -45,11 +45,42 @@ namespace engine
         return true;
     }
 
+    int formality_rank(Formality formality)
+    {
+        switch (formality)
+        {
+        case Formality::Casual:
+            return 0;
+        case Formality::Business:
+            return 1;
+        case Formality::Elegant:
+            return 2;
+        }
+        return 0;
+    }
+
+    int formality_gap(Formality formality, const Occasion &occasion)
+    {
+        const int rank = formality_rank(formality);
+        const int lo = formality_rank(occasion.min_formality);
+        const int hi = formality_rank(occasion.max_formality);
+
+        if (rank < lo)
+        {
+            return lo - rank;
+        }
+        if (rank > hi)
+        {
+            return rank - hi;
+        }
+        return 0;
+    }
+
+    // one definition of "outside the band" - the filter and the score both
+    // read it off the same gap, so they can never disagree about who fits
     bool fits_formality(const Garment &garment, const Occasion &occasion)
     {
-        // Formality is ordered, so a range check is just two comparisons.
-        return garment.formality >= occasion.min_formality &&
-               garment.formality <= occasion.max_formality;
+        return formality_gap(garment.formality, occasion) == 0;
     }
 
     bool matches(const Garment &garment, const Occasion &occasion,
@@ -61,7 +92,7 @@ namespace engine
 
     bool Relaxed::any() const
     {
-        return tops || bottoms || shoes;
+        return tops || bottoms || shoes || anchor;
     }
 
     // check if we have all aspects of our outfit ready

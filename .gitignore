@@ -9,3 +9,7 @@ dist/
 
 # OS / editor
 .DS_Store
+
+# Your wardrobe, not the project's. The db and the cutouts live in
+# ~/.fit-check/data so every worktree shares one closet — see backend/paths.py
+backend/data/
