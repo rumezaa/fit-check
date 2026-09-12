@@ -1,0 +1,302 @@
+#!/usr/bin/env bash
+#
+# Bring up the whole kiosk for whichever branch this worktree is on: build the
+# engine, install the python and node deps, then run the API and the frontend
+# together until you ctrl-c.
+#
+# Every worktree gets its own pair of ports, so you can have several branches
+# up at once and flip between them in the browser. `./start --list` prints who
+# is on which port.
+
+set -euo pipefail
+
+# -P so ROOT is the real path: conductor renames a workspace by symlinking the
+# new name at the old directory, and `git worktree list` only ever answers with
+# the physical one, so a logical $ROOT would match none of its rows
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+CACHE="${XDG_CACHE_HOME:-$HOME/.cache}/fit-check"
+
+API_BASE=8000
+WEB_BASE=5173
+SLOTS=50 # how many worktrees we can hand ports out to before wrapping
+
+FRESH=0
+OPEN=1
+BUILD_ENGINE=1
+LIST=0
+FORCED_OFFSET=""
+
+# ---------------------------------------------------------------- output ----
+
+if [ -t 1 ]; then
+    DIM=$'\033[2m'; RED=$'\033[31m'; GREEN=$'\033[32m'
+    BLUE=$'\033[34m'; MAGENTA=$'\033[35m'; BOLD=$'\033[1m'; OFF=$'\033[0m'
+else
+    DIM=""; RED=""; GREEN=""; BLUE=""; MAGENTA=""; BOLD=""; OFF=""
+fi
+
+say() { printf '%s==>%s %s\n' "$BLUE" "$OFF" "$*"; }
+note() { printf '%s    %s%s\n' "$DIM" "$*" "$OFF"; }
+die() { printf '%serror:%s %s\n' "$RED" "$OFF" "$*" >&2; exit 1; }
+
+usage() {
+    cat <<'EOF'
+usage: ./start [options]
+
+Runs the engine, the API and the frontend for this worktree's branch.
+
+options:
+  --list            show every worktree, its branch, its ports, and whether
+                    it is up right now, then exit
+  --fresh           rebuild the engine and reinstall deps from scratch
+  --no-engine       skip the C++ build (the API starts, /outfits will 400)
+  --no-open         do not open a browser window
+  --offset N        force the port slot instead of deriving one (API is
+                    8000+N, frontend is 5173+N)
+  -h, --help        this
+
+Ports are per worktree, so you can leave one branch up, start another, and
+flip between the two tabs. `./start --list` says which is which.
+EOF
+}
+
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --list) LIST=1 ;;
+        --fresh) FRESH=1 ;;
+        --no-engine) BUILD_ENGINE=0 ;;
+        --no-open) OPEN=0 ;;
+        --offset) shift; FORCED_OFFSET="${1:-}"; [ -n "$FORCED_OFFSET" ] || die "--offset needs a number" ;;
+        -h|--help) usage; exit 0 ;;
+        *) usage >&2; die "unknown option: $1" ;;
+    esac
+    shift
+done
+
+# ----------------------------------------------------------------- ports ----
+
+port_free() { ! lsof -nP -iTCP:"$1" -sTCP:LISTEN >/dev/null 2>&1; }
+
+# git answers with a path relative to the worktree when we are standing in the
+# primary checkout and an absolute one from a linked worktree, so resolve it
+# from $ROOT either way
+PRIMARY="$(cd "$ROOT" && cd "$(git rev-parse --git-common-dir)/.." && pwd -P)"
+
+# path<TAB>branch for every worktree, primary first
+worktrees() {
+    git -C "$ROOT" worktree list --porcelain | awk '
+        /^worktree /  { if (w != "") print w "\t" b; w = substr($0, 10); b = "(detached)" }
+        /^branch /    { sub("refs/heads/", "", $2); b = $2 }
+        END           { if (w != "") print w "\t" b }
+    '
+}
+
+# path<TAB>branch<TAB>slot. The primary checkout keeps the familiar 8000/5173
+# so anything you have bookmarked there still works; every other worktree
+# hashes its name into a slot and steps past whatever an earlier one already
+# claimed, so two names that happen to hash alike still get their own ports and
+# --list says the same thing a start would bind. A slot stays put as long as
+# the worktrees around it do.
+claimed() { case "$2" in *" $1 "*) return 0 ;; esac; return 1; }
+
+assignments() {
+    local taken=" 0 " dir branch slot guard # 0 is the primary's, always
+    while IFS=$'\t' read -r dir branch; do
+        if [ "$dir" = "$PRIMARY" ]; then
+            slot=0
+        else
+            slot=$(( $(printf '%s' "$(basename "$dir")" | cksum | awk '{print $1}') % SLOTS ))
+            guard=0
+            while claimed "$slot" "$taken"; do
+                slot=$(( (slot + 1) % SLOTS ))
+                guard=$((guard + 1))
+                [ "$guard" -lt "$SLOTS" ] || break # more worktrees than slots
+            done
+            taken="$taken$slot "
+        fi
+        printf '%s\t%s\t%s\n' "$dir" "$branch" "$slot"
+    done < <(worktrees)
+}
+
+if [ "$LIST" = 1 ]; then
+    printf '%s%-28s %-26s %-12s %s%s\n' "$BOLD" "WORKTREE" "BRANCH" "PORTS" "STATE" "$OFF"
+    while IFS=$'\t' read -r dir branch slot; do
+        api=$((API_BASE + slot)); web=$((WEB_BASE + slot))
+        if port_free "$web"; then state="${DIM}down${OFF}"; else state="${GREEN}up  → http://localhost:$web${OFF}"; fi
+        printf '%-28s %-26s %-12s %b\n' "$(basename "$dir")" "$branch" "$api/$web" "$state"
+    done < <(assignments)
+    exit 0
+fi
+
+if [ -n "$FORCED_OFFSET" ]; then
+    SLOT="$FORCED_OFFSET"
+    port_free $((API_BASE + SLOT)) || die "port $((API_BASE + SLOT)) is already taken"
+    port_free $((WEB_BASE + SLOT)) || die "port $((WEB_BASE + SLOT)) is already taken"
+else
+    SLOT="$(assignments | awk -F'\t' -v me="$ROOT" '$1 == me { print $3 }')"
+    [ -n "$SLOT" ] || die "could not work out a port for $ROOT"
+    # our own slot is normally free; if this branch is already up, or something
+    # unrelated is sitting on the port, walk to the next clear pair
+    tries=0
+    while ! port_free $((API_BASE + SLOT)) || ! port_free $((WEB_BASE + SLOT)); do
+        SLOT=$(( (SLOT + 1) % SLOTS ))
+        tries=$((tries + 1))
+        [ "$tries" -lt "$SLOTS" ] || die "no free port pair in $API_BASE-$((API_BASE + SLOTS)) / $WEB_BASE-$((WEB_BASE + SLOTS))"
+    done
+fi
+
+API_PORT=$((API_BASE + SLOT))
+WEB_PORT=$((WEB_BASE + SLOT))
+BRANCH="$(git -C "$ROOT" rev-parse --abbrev-ref HEAD 2>/dev/null || echo '(detached)')"
+
+say "${BOLD}$(basename "$ROOT")${OFF} on ${BOLD}$BRANCH${OFF} — api :$API_PORT, frontend :$WEB_PORT"
+
+# ---------------------------------------------------------------- engine ----
+
+if [ "$BUILD_ENGINE" = 1 ]; then
+    command -v cmake >/dev/null || die "cmake not found (brew install cmake)"
+    [ "$FRESH" = 1 ] && rm -rf "$ROOT/engine/build"
+    say "building the engine"
+    # a clean build says nothing; a broken one is the whole log, warnings and all
+    LOG="$(mktemp -t fit-check-engine)"
+    if ! cmake -S "$ROOT/engine" -B "$ROOT/engine/build" -DCMAKE_BUILD_TYPE=Release >"$LOG" 2>&1 ||
+        ! cmake --build "$ROOT/engine/build" -j"$(sysctl -n hw.ncpu 2>/dev/null || echo 4)" >>"$LOG" 2>&1; then
+        cat "$LOG" >&2
+        rm -f "$LOG"
+        die "engine build failed — rerun with --no-engine to bring up the rest anyway"
+    fi
+    rm -f "$LOG"
+    note "engine/build/fit-check"
+fi
+
+# ---------------------------------------------------------------- python ----
+
+# backend/.venv is where this project has always kept its venv, so use one if
+# it is here, then fall back to the primary checkout's (rembg is half a gig —
+# no reason for every worktree to have its own copy), and only build one of our
+# own when neither exists. That last one is keyed by requirements.txt, so a
+# branch that changes the deps gets its own rather than stepping on the others.
+pick_python() {
+    local candidate path version
+    for candidate in python3.12 python3.13 python3.11 python3.10 python3; do
+        path="$(command -v "$candidate" 2>/dev/null)" || continue
+        version="$("$path" -c 'import sys; print("%d%02d" % sys.version_info[:2])' 2>/dev/null)" || continue
+        # 3.9 is too old for the `x | None` annotations the backend is written in
+        if [ "$version" -ge 310 ]; then
+            echo "$path"
+            return 0
+        fi
+    done
+    return 1
+}
+
+REQS="$ROOT/backend/requirements.txt"
+REQS_HASH="$(shasum -a 256 "$REQS" | cut -c1-12)"
+
+if [ -x "$ROOT/backend/.venv/bin/python" ]; then
+    VENV="$ROOT/backend/.venv"
+elif [ -x "$PRIMARY/backend/.venv/bin/python" ]; then
+    VENV="$PRIMARY/backend/.venv"
+else
+    VENV="$CACHE/venv-$REQS_HASH"
+fi
+
+# --fresh only throws away a venv we made ourselves; blowing away one you set
+# up by hand is not ours to do
+case "$VENV" in "$CACHE"/*) [ "$FRESH" = 1 ] && rm -rf "$VENV" ;; esac
+
+if [ ! -x "$VENV/bin/python" ]; then
+    rm -rf "$VENV" # a half finished install from an interrupted run
+    PYTHON="$(pick_python)" || die "need python 3.10 or newer on PATH"
+    say "creating the backend venv — first run pulls rembg, give it a few minutes"
+    note "$VENV"
+    mkdir -p "$CACHE"
+    "$PYTHON" -m venv "$VENV" || die "could not create a venv with $PYTHON"
+    "$VENV/bin/python" -m pip install --quiet --disable-pip-version-check --upgrade pip
+fi
+
+# the stamp is what requirements.txt hashed to last time we installed into this
+# venv, so switching to a branch that added a dep picks it up on the next start
+if [ "$(cat "$VENV/.fit-check-reqs" 2>/dev/null || true)" != "$REQS_HASH" ] || [ "$FRESH" = 1 ]; then
+    say "installing backend deps"
+    "$VENV/bin/python" -m pip install --quiet --disable-pip-version-check -r "$REQS" ||
+        die "pip install failed"
+    echo "$REQS_HASH" > "$VENV/.fit-check-reqs"
+fi
+note "venv $VENV"
+
+# ------------------------------------------------------------------ node ----
+
+command -v npm >/dev/null || die "npm not found"
+if [ "$FRESH" = 1 ]; then
+    rm -rf "$ROOT/frontend/node_modules"
+fi
+if [ ! -d "$ROOT/frontend/node_modules" ] || [ "$ROOT/frontend/package-lock.json" -nt "$ROOT/frontend/node_modules" ]; then
+    say "installing frontend deps"
+    (cd "$ROOT/frontend" && npm install --silent) || die "npm install failed"
+fi
+
+# ------------------------------------------------------------------- run ----
+
+API_PID=""
+WEB_PID=""
+
+cleanup() {
+    trap - EXIT INT TERM HUP
+    printf '\n'
+    say "stopping"
+    for pid in "$WEB_PID" "$API_PID"; do
+        [ -n "$pid" ] || continue
+        pkill -P "$pid" 2>/dev/null || true # uvicorn --reload and vite both fork
+        kill "$pid" 2>/dev/null || true
+    done
+    wait 2>/dev/null || true
+}
+trap cleanup EXIT INT TERM HUP
+
+say "starting the api"
+(
+    cd "$ROOT"
+    exec "$VENV/bin/uvicorn" backend.api.main:app \
+        --host 127.0.0.1 --port "$API_PORT" \
+        --reload --reload-dir "$ROOT/backend"
+) > >(sed "s/^/${MAGENTA}[api]${OFF} /") 2>&1 &
+API_PID=$!
+
+# the first import loads rembg, which is slow enough that vite would otherwise
+# proxy into a closed port for a few seconds
+for _ in $(seq 1 120); do
+    if curl -sf "http://127.0.0.1:$API_PORT/options" >/dev/null 2>&1; then
+        break
+    fi
+    kill -0 "$API_PID" 2>/dev/null || die "the api exited on startup (see [api] above)"
+    sleep 1
+done
+
+say "starting the frontend"
+(
+    cd "$ROOT/frontend"
+    FIT_CHECK_API_PORT="$API_PORT" FIT_CHECK_WEB_PORT="$WEB_PORT" \
+        exec npm run dev --silent -- --port "$WEB_PORT" --strictPort
+) > >(sed "s/^/${GREEN}[web]${OFF} /") 2>&1 &
+WEB_PID=$!
+
+# vite binds localhost, which resolves to ::1 here, so name it that way
+URL="http://localhost:$WEB_PORT"
+for _ in $(seq 1 60); do
+    port_free "$WEB_PORT" || break
+    kill -0 "$WEB_PID" 2>/dev/null || die "the frontend exited on startup (see [web] above)"
+    sleep 1
+done
+
+printf '\n%s  %s  →  %s%s\n' "$BOLD" "$BRANCH" "$URL" "$OFF"
+note "api docs at http://127.0.0.1:$API_PORT/docs · ctrl-c to stop"
+printf '\n'
+
+[ "$OPEN" = 1 ] && command -v open >/dev/null && open "$URL" >/dev/null 2>&1 || true
+
+# if either half falls over, take the other down with it rather than leaving a
+# half dead kiosk behind
+while kill -0 "$API_PID" 2>/dev/null && kill -0 "$WEB_PID" 2>/dev/null; do
+    sleep 1
+done
