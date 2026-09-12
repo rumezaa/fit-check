@@ -5,11 +5,14 @@
 #include <chrono>
 #include <vector>
 #include <cmath>
+#include <utility>
 
 namespace
 {
     using engine::Aesthetic;
     using engine::Formality;
+    using engine::formality_gap;
+    using engine::formality_rank;
     using engine::Garment;
     using engine::Lch;
     using engine::Occasion;
@@ -26,20 +29,25 @@ namespace
     constexpr float TONAL_HUE_MAX = 15.0f; // hue this close = same family (committed)
     constexpr float MUDDY_HUE_MAX = 45.0f; // hue in (TONAL, this) = adjacent-but-off
 
-    // lightness bands used when one piece is neutral
-    constexpr float MONO_L_GAP = 8.0f;      // under this = essentially monochrome
-    constexpr float CONTRAST_L_GAP = 20.0f; // over this = crisp contrast
+    // lightness anchors - the curve holds MONO out to MONO_L_GAP, dips through
+    // MID_L_GAP and has climbed back to GREAT by CONTRAST_L_FULL
+    constexpr float MONO_L_GAP = 8.0f;       // inside this = essentially monochrome
+    constexpr float MID_L_GAP = 18.0f;       // the bottom of the dip
+    constexpr float CONTRAST_L_FULL = 34.0f; // by here it reads as crisp contrast
 
-    // hue bands used when both pieces are chromatic
-    constexpr float ANALOGOUS_HUE_MAX = 45.0f;
-    constexpr float CLASH_HUE_MAX = 100.0f;
-    constexpr float TRIADIC_HUE_MAX = 150.0f;
+    // hue anchors, used when both pieces carry enough chroma to have a hue
+    constexpr float ANALOGOUS_HUE_MAX = 45.0f;  // still one family
+    constexpr float CLASH_HUE_CENTER = 90.0f;   // far enough to argue, not to answer
+    // complementary sits at 180 apart, and this is the tolerance around it -
+    // the same width the analogous band allows at the other end of the circle
+    constexpr float COMPLEMENT_HUE_MIN = 135.0f;
 
     constexpr float GREAT = 40.0f;
     constexpr float OKAY = 10.0f;
     constexpr float MONO = 30.0f;
     constexpr float CLASH = -30.0f;
     constexpr float MUDDY = -20.0f;
+    constexpr float TONAL = 25.0f; // two neutrals a few steps of lightness apart
 
     // recency bands, in days since the piece was last worn
     constexpr int STALE_DAYS = 30; // past this it counts as rested
@@ -83,36 +91,41 @@ namespace
         return std::min(d, 360.0f - d); // short way around the circle
     }
 
-    int rank_formality(Formality f)
+    float lerp(float a, float b, float t)
     {
-        switch (f)
-        {
-        case Formality::Casual:
-            return 0;
-        case Formality::Business:
-            return 1;
-        case Formality::Elegant:
-            return 2;
-        }
-        return 0;
+        return a + t * (b - a);
     }
 
-    // how many rungs a piece sits outside the occasions band, 0 when it fits
-    int formality_gap(Formality f, const Occasion &occ)
+    // reads a score off a table of (x, score) anchors, straight-lining between
+    // them. the anchors are the same numbers the bands used to snap to - we
+    // interpolate now instead, so a garment landing either side of what used
+    // to be a boundary moves a point or two rather than thirty
+    template <std::size_t N>
+    float ramp(const std::array<std::pair<float, float>, N> &anchors, float x)
     {
-        const int rank = rank_formality(f);
-        const int lo = rank_formality(occ.min_formality);
-        const int hi = rank_formality(occ.max_formality);
+        if (x <= anchors.front().first)
+        {
+            return anchors.front().second;
+        }
+        for (std::size_t i = 1; i < N; ++i)
+        {
+            if (x <= anchors[i].first)
+            {
+                const float x0 = anchors[i - 1].first, y0 = anchors[i - 1].second;
+                const float x1 = anchors[i].first, y1 = anchors[i].second;
+                return lerp(y0, y1, (x - x0) / (x1 - x0));
+            }
+        }
+        return anchors.back().second;
+    }
 
-        if (rank < lo)
-        {
-            return lo - rank;
-        }
-        if (rank > hi)
-        {
-            return rank - hi;
-        }
-        return 0;
+    // how much of a say hue gets. zero at a dead grey, one once a piece carries
+    // enough chroma to read as a colour - it used to be a hard `chroma < 15`,
+    // which is why a navy at 17.5 scored thirty points apart from the same
+    // navy at 14
+    float chromatic(float chroma)
+    {
+        return std::clamp(chroma / NEUTRAL_C, 0.0f, 1.0f);
     }
 
     float map_range(float x)
@@ -224,56 +237,59 @@ namespace
         return map_range(fit + volume_balance(top.silhouette, bottom.silhouette));
     }
 
-    // using lch scale gives us a more dim look on complementary color using degree dist. in hues and l and c
-    // returns a score in [-50, +50]
+    // hue distance -> score. flat and good while two colours share a family,
+    // through a trough where they are far enough apart to argue and not far
+    // enough to answer each other, back up as they approach opposite
+    constexpr std::array<std::pair<float, float>, 5> kHueRamp{{
+        {0.0f, GREAT},
+        {ANALOGOUS_HUE_MAX, GREAT},
+        {CLASH_HUE_CENTER, CLASH},
+        {COMPLEMENT_HUE_MIN, GREAT},
+        {180.0f, GREAT},
+    }};
+
+    // lightness separation -> score, for the part of the judgement hue has no
+    // say in. it runs monochrome, through tonal, up to crisp contrast - and
+    // never below tonal, because how far apart two lightnesses are says how
+    // deliberate a pairing reads, never whether it works
+    //
+    // there used to be a second ramp here that dipped to MUDDY, for a neutral
+    // worn against a colour. that dip is a hue complaint - "close but not the
+    // same" - and hue is exactly what the pieces it fired on did not have. a
+    // black top on a grey skirt is not an almost-match, it is black on grey
+    constexpr std::array<std::pair<float, float>, 5> kLightnessRamp{{
+        {0.0f, MONO},
+        {MONO_L_GAP, MONO},
+        {MID_L_GAP, TONAL},
+        {CONTRAST_L_FULL, GREAT},
+        {100.0f, GREAT},
+    }};
+
+    // using lch scale gives us a more dim look on complementary color using
+    // degree dist. in hues and l and c. returns a score in [-50, +50]
+    //
+    // there are no branches left in here. what used to be three cases behind
+    // two hard thresholds - both neutral, one neutral, both chromatic - is now
+    // two cross-fades, because every threshold we had was a cliff a garment
+    // could land a hair off and lose thirty points to
     float score_color(const Garment &top, const Garment &bottom)
     {
-        // ---------- BRANCH 1: at least one neutral ----------
-        // hue is meaningless here, so judge on lightness separation only.
-        // U-shape: good low (mono), bad middle, good high (contrast)
-        if (is_neutral(top.color) || is_neutral(bottom.color))
-        {
-            float dl = std::abs(top.color.l - bottom.color.l);
+        const float dl = std::abs(top.color.l - bottom.color.l);
+        const float d = hue_dist(top.color.h, bottom.color.h); // circular, 0..180
 
-            if (dl < MONO_L_GAP)
-            {
-                return MONO; // essentially monochrome, reads as intentional
-            }
-            if (dl < CONTRAST_L_GAP)
-            {
-                return MUDDY; // close-but-different, like navy and purple idk
-            }
-            return GREAT; // clear contrast, crisp
-        }
+        // the duller piece decides whether hue means anything at all - one
+        // dead grey and there is nothing for the other hue to sit against
+        const float hue_say = chromatic(std::min(top.color.c, bottom.color.c));
 
-        // ---------- BRANCH 2: both chromatic, essentially not mutes ----------
-        float d = hue_dist(top.color.h, bottom.color.h); // circular, 0..180
-        float dl = std::abs(top.color.l - bottom.color.l);
+        const float lightness = ramp(kLightnessRamp, dl);
 
-        float hue_score = 0.0f;
-        if (d <= ANALOGOUS_HUE_MAX)
-        {
-            hue_score = GREAT; // mono / analogous
-        }
-        else if (d <= CLASH_HUE_MAX)
-        {
-            hue_score = CLASH; // muddy clash zone
-        }
-        else if (d <= TRIADIC_HUE_MAX)
-        {
-            hue_score = OKAY; // triadic-ish
-        }
-        else
-        {
-            hue_score = GREAT; // complementary
-        }
+        // the "almost matches" complaint is about hue, so it fades out with
+        // hue's say the same way the rest of the hue term does
+        const bool muddy =
+            dl < MUDDY_L_GAP && d > TONAL_HUE_MAX && d < MUDDY_HUE_MAX;
+        const float penalty = muddy ? MUDDY * hue_say : 0.0f;
 
-        // lightness only punishes the "almost matches" case: close in L *and*
-        // adjacent-but-not-same in hue.
-        bool muddy = dl < MUDDY_L_GAP && d > TONAL_HUE_MAX && d < MUDDY_HUE_MAX;
-        float l_penalty = muddy ? MUDDY : 0.0f;
-
-        return hue_score + l_penalty;
+        return map_range(lerp(lightness, ramp(kHueRamp, d), hue_say) + penalty);
     }
 
     float score_formality(const Garment &top, const Garment &bottom, const Occasion &occ)
@@ -281,7 +297,7 @@ namespace
         // find if pieces are consistent with each other - in general a a plain cotton t-shirt w/ silk skirt === clash
         float consistency;
 
-        int spread = std::abs(rank_formality(top.formality) - rank_formality(bottom.formality));
+        int spread = std::abs(formality_rank(top.formality) - formality_rank(bottom.formality));
 
         if (spread == 0)
         {
@@ -307,6 +323,27 @@ namespace
         return (consistency + fit) / 2;
     }
 
+    // two pieces in the same pattern read as a set when they look like they
+    // came off the same bolt: close in tone, and close in hue if they have any
+    // hue to speak of
+    //
+    // deliberately not score_color. that answers "do these go together", which
+    // pays out for contrast as readily as for likeness - orange dots against
+    // teal dots score full marks there, and they are many things but they are
+    // not a set
+    bool reads_as_a_set(const Garment &top, const Garment &bottom)
+    {
+        if (std::abs(top.color.l - bottom.color.l) >= CONTRAST_L_FULL)
+        {
+            return false; // too far apart in tone to read as one cloth
+        }
+
+        // a hue neither piece really has cannot pull them apart - two offwhites
+        // sit 26 degrees away from each other on paper and identical in the eye
+        const float hue_say = chromatic(std::min(top.color.c, bottom.color.c));
+        return hue_say * hue_dist(top.color.h, bottom.color.h) <= ANALOGOUS_HUE_MAX;
+    }
+
     float score_pattern(const Garment &top, const Garment &bottom)
     {
         Pattern t = top.pattern;
@@ -322,10 +359,13 @@ namespace
             return GREAT;
         }
 
-        // case for the same pattern
+        // both in the same pattern reads one of two ways, and colour is what
+        // decides which. two polkadots in the same offwhite is a set, chosen
+        // on purpose; the same two polkadots fighting on hue is just busy
+        //
         if (t == b)
         {
-            return OKAY;
+            return reads_as_a_set(top, bottom) ? GREAT : OKAY;
         }
 
         return CLASH;

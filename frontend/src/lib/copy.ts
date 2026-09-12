@@ -2,7 +2,10 @@
    but the mockups use a few others (gym, party, brunch…), so match on a
    normalised key and fall back to something that still reads naturally. */
 
-import type { TryOnResponse } from './types'
+import { FORMALITIES } from './types'
+import type {
+  DressCode, Formality, Relaxed, TryOnResponse,
+} from './types'
 
 const LINES: Record<string, string> = {
   'errands':             "Errands?? Okay — cute but comfy!!",
@@ -82,13 +85,17 @@ export function verdictReason(r: TryOnResponse): string {
 
   if (!r.closet_can_dress) {
     // nothing to measure against, so the only honest thing to report is what
-    // it unlocks — which is every one of these, because right now none of
-    // them have anything to pair with
-    return `You can't build a full outfit right now. This would make ${r.tried} possible.`
+    // it unlocks — every pairing here is one they cannot make at all today
+    return `You can't build a full outfit right now. ` +
+           `This would make ${r.tried - r.clashes} possible.`
   }
 
   if (!r.works) {
-    return `None of your ${r.tried} ${rail} go with it better than what you already wear.`
+    // clashing and merely losing are different answers: one says the colours
+    // fight, the other says you already own something better
+    return r.clashes === r.tried
+      ? `It clashes with all ${r.tried} of your ${rail}.`
+      : `None of your ${r.tried} ${rail} go with it better than what you already wear.`
   }
 
   const goes = `Goes with ${r.works} of your ${r.tried} ${rail}`
@@ -110,4 +117,94 @@ export function verdictLine(r: TryOnResponse): string {
     return "Hmm!! It works, but only with a few things. Do you love it enough??"
   }
   return "Bye!! You've got nothing that goes with it. Save your money, babe."
+}
+
+/* ---- when we bent the dress code ---- */
+
+/** Reads the band back the way someone would say it out loud, or null when the
+    occasion takes no position at all — there is nothing to quote then. */
+function bandName(code: DressCode | null): string | null {
+  if (!code) return null
+  if (code.min === code.max) return code.min.toLowerCase()
+  if (code.min === 'Casual' && code.max === 'Elegant') return null
+  if (code.max === 'Elegant') return `${code.min.toLowerCase()} or dressier`
+  return `${code.min.toLowerCase()} to ${code.max.toLowerCase()}`
+}
+
+/** Which side of the band a piece fell off, or null when we can't tell. A
+    relaxed rail can be under the code (only casual pants, corporate morning)
+    or over it (nothing but silk, running errands), and those read nothing
+    alike — so we ask the piece rather than guess. */
+type Side = 'under' | 'over'
+function sideOf(f: Formality | null | undefined, code: DressCode | null): Side | null {
+  if (!f || !code) return null
+  const rank = FORMALITIES.indexOf(f)
+  if (rank < 0) return null
+  if (rank < FORMALITIES.indexOf(code.min)) return 'under'
+  if (rank > FORMALITIES.indexOf(code.max)) return 'over'
+  return null
+}
+
+/** What the look on the racks is wearing, so the note can name the direction. */
+export interface WornFormality {
+  top?: Formality | null
+  bottom?: Formality | null
+  anchor?: Formality | null
+}
+
+/** Why the look on screen is outside the dress code, or null when it isn't.
+
+    The engine would rather hand back a stretched outfit than nothing at all —
+    only casual pants in the closet still gets you dressed for corporate. That
+    is a choice we made on the user's behalf, so it has to be said out loud
+    rather than left for them to notice. */
+export function stretchNote(
+  relaxed: Relaxed | null,
+  code: DressCode | null,
+  occasion: string,
+  worn: WornFormality = {},
+): string | null {
+  if (!relaxed?.any) return null
+
+  // shoes are filtered but never paired, so a stretch there is nothing the
+  // user can see on the racks — saying it would just be confusing
+  const rails: string[] = []
+  const sides: (Side | null)[] = []
+  if (relaxed.tops)    { rails.push('tops');    sides.push(sideOf(worn.top, code)) }
+  if (relaxed.bottoms) { rails.push('bottoms'); sides.push(sideOf(worn.bottom, code)) }
+
+  const band = bandName(code)
+  const where = occasion ? ` for ${occasion.toLowerCase()}` : ''
+  const needs = occasion ? `${occasion.toLowerCase()} needs` : 'the day needs'
+  const want = band ? ` — that's ${band}` : ''
+
+  if (relaxed.anchor && !rails.length) {
+    // they locked the piece themselves, so this is a heads up, not an apology
+    switch (sideOf(worn.anchor, code)) {
+      case 'under':
+        return `That piece is under the dress code${where}${want}. Styling it up anyway!!`
+      case 'over':
+        return `That piece is dressier than ${needs}${want}. Styling around it anyway!!`
+      default:
+        return `That piece sits outside the dress code${where}${want}. Wearing it anyway!!`
+    }
+  }
+  if (!rails.length) return null
+
+  const list = rails.length === 2 ? 'tops or bottoms' : rails[0]
+  const also = relaxed.anchor ? ' Your locked piece misses it too.' : ''
+  // one direction for both rails or we say nothing about direction
+  const side = sides.every((s) => s === sides[0]) ? sides[0] : null
+
+  switch (side) {
+    case 'under':
+      return `Nothing in your ${list} is dressy enough${where}${want}. ` +
+             `Going with what you own!!${also}`
+    case 'over':
+      return `Everything in your ${list} is dressier than ${needs}${want}. ` +
+             `Wearing it anyway!!${also}`
+    default:
+      return `Nothing in your ${list} matches the dress code${where}${want}. ` +
+             `Going with what you own!!${also}`
+  }
 }

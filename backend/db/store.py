@@ -6,7 +6,11 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-DB = Path(__file__).resolve().parent.parent / "data/wardrobe.db"
+from ..paths import DATA_DIR
+
+# the closet lives outside the checkout so every worktree sees one wardrobe —
+# see backend/paths.py. the schema is code, so it stays with the code
+DB = DATA_DIR / "wardrobe.db"
 SCHEMA = Path(__file__).parent / "schema.sql"
 
 

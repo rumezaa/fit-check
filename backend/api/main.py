@@ -189,10 +189,18 @@ def options():
 
 @app.post("/outfits")
 def pick(req: OutfitRequest):
-    # caught here rather than in the engine so the 404 names the garment the
-    # user tapped, instead of coming back as a generic bad request
-    if req.anchor_id is not None and store.get_garment(req.anchor_id) is None:
-        raise HTTPException(404, f"no garment with id {req.anchor_id}")
+    # both caught here rather than in the engine so the error names the garment
+    # the user tapped, instead of coming back as a generic bad request
+    if req.anchor_id is not None:
+        anchor = store.get_garment(req.anchor_id)
+        if anchor is None:
+            raise HTTPException(404, f"no garment with id {req.anchor_id}")
+        # the engine pairs a top with a bottom, so shoes have no other side to
+        # style around — it refuses too, but only after we have paid for a
+        # subprocess and a full closet serialisation
+        if anchor["category"] == "Shoes":
+            name = anchor["name"] or f"garment {req.anchor_id}"
+            raise HTTPException(400, f"{name} is a pair of shoes — style around a top or a bottom")
 
     result = pick_outfits(
         store.get_garments(),

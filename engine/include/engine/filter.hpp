@@ -51,6 +51,14 @@ namespace engine
     // leaves us nothing else to reach for
     bool fits_formality(const Garment &garment, const Occasion &occasion);
 
+    // formality as a number, so "one rung under" is a thing we can say
+    int formality_rank(Formality formality);
+
+    // how many rungs a piece sits outside the occasions band, 0 when it fits.
+    // scoring charges by this, which is what lets a rail we had to relax still
+    // rank itself - the business trousers come up before the cargos
+    int formality_gap(Formality formality, const Occasion &occasion);
+
     // gets garments that match the occasion in this weather
     bool matches(const Garment &garment, const Occasion &occasion,
                  const Weather &weather);
@@ -62,6 +70,12 @@ namespace engine
         bool tops = false;
         bool bottoms = false;
         bool shoes = false;
+
+        // the piece being styled around comes in exempt from the dress code,
+        // so when it misses that is a stretch too - and the rail it fixes is
+        // not, because we never walk it. filter_closet cannot know either way,
+        // so it leaves this alone and whoever resolved the anchor sets it
+        bool anchor = false;
 
         bool any() const;
     };

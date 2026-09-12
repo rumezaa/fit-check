@@ -38,9 +38,15 @@ async function req<T>(path: string, init?: RequestInit): Promise<T> {
   }
 }
 
-/** How many looks a run hands back. Matches kPoolSize in the engine, so the set
-    it samples the opening look from is exactly the set refresh can cycle. */
-export const LOOKS_PER_RUN = 5
+/** How many looks a run hands back.
+
+    This has to be at least kPoolSize (5) in the engine, so the pair it samples
+    the opener from is always one refresh can reach. It used to be exactly 5,
+    which was fine on a four-garment closet and silently truncating on a real
+    one - thirteen tops go with that polkadot skirt and only the first five
+    were ever reachable. The pool is still 5, so we open on a strong look; the
+    rest of the list is there to page through. */
+export const LOOKS_PER_RUN = 12
 
 export const api = {
   options: () => req<Options>('/options'),

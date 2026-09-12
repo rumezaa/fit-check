@@ -28,6 +28,16 @@ namespace
     // the shortlist just means sampling something the user cant get back to
     constexpr std::size_t kPoolSize = 5;
 
+    // the colour a pair has to beat to be worth showing at all. OKAY is what
+    // score_color returns when two colours are triadic-ish - far enough apart
+    // not to clash, not far enough to read as deliberate - so it means "no
+    // opinion", and no opinion is not a recommendation
+    //
+    // this is the one bar that means the same thing in every run. colour is
+    // scored on the pair alone, so unlike the total, no vibe can weight its
+    // way past it - a pair that misses here misses under every vibe
+    constexpr float kColorFloor = 10.0f;
+
     // a scored combo plus the pieces that made it so we can name them when
     // printing - the pointers borrow from Candidates which outlives them
     struct RankedPair
@@ -67,6 +77,15 @@ namespace
         return sorted_ranked_pairs;
     }
 
+    // the pairs worth putting in front of someone. we rank first and cut
+    // after, so pairs_scored still reports everything we actually looked at
+    std::vector<RankedPair> above_color_floor(std::vector<RankedPair> ranked)
+    {
+        std::erase_if(ranked, [](const RankedPair &pair)
+                      { return pair.score.color <= kColorFloor; });
+        return ranked;
+    }
+
     // picks one outfit from the best few, leaning towards the better ones but
     // never stuck on the top score so we get a different answer each run
     //
@@ -88,9 +107,29 @@ namespace
         return pick(rng);
     }
 
+    const char *formality_name(engine::Formality f)
+    {
+        switch (f)
+        {
+        case engine::Formality::Casual:
+            return "Casual";
+        case engine::Formality::Business:
+            return "Business";
+        case engine::Formality::Elegant:
+            return "Elegant";
+        }
+        return "Casual";
+    }
+
+    // formality rides along with every piece we name. a stretched outfit is
+    // only explainable if whoever renders it can see what the piece actually
+    // is next to what the occasion asked for
     json garment_json(const engine::Garment &g)
     {
-        return json{{"id", g.id}, {"name", g.name}, {"hex", g.hex}};
+        return json{{"id", g.id},
+                    {"name", g.name},
+                    {"hex", g.hex},
+                    {"formality", formality_name(g.formality)}};
     }
 
     const char *category_name(engine::Category c)
@@ -204,20 +243,48 @@ int main()
         const std::span<const engine::Garment> anchor_rail{anchor, anchor ? 1u : 0u};
         const bool anchored_top = anchor && anchor->category == engine::Category::Top;
 
-        const std::vector<RankedPair> sorted_ranked_pairs = rank_pairs(
+        const std::vector<RankedPair> scored = rank_pairs(
             anchored_top ? anchor_rail : std::span<const engine::Garment>{candidates.tops},
             anchor && !anchored_top ? anchor_rail : std::span<const engine::Garment>{candidates.bottoms},
             occasion, vibe, today);
 
+        // everything downstream works off the survivors - we would rather hand
+        // back fewer looks, or none, than dress someone in a pair whose
+        // colours we have nothing good to say about
+        const std::vector<RankedPair> sorted_ranked_pairs = above_color_floor(scored);
+
+        // the relaxed report has to describe the outfit we actually built, not
+        // the shape of the closet. the rail the anchor fixes never gets walked,
+        // so whatever filter_closet did to refill it is not part of this answer
+        // - and the anchor came in exempt from the dress code, so if it misses
+        // it, that is the stretch we owe the user instead
+        engine::Relaxed relaxed = candidates.relaxed;
+        if (anchor != nullptr)
+        {
+            (anchored_top ? relaxed.tops : relaxed.bottoms) = false;
+            relaxed.anchor =
+                engine::formality_gap(anchor->formality, occasion) > 0;
+        }
+
         json out{
             {"ok", true},
             {"mode", anchor ? "anchored" : "outfit"},
-            {"anchor", anchor ? json{{"id", anchor->id}, {"name", anchor->name}, {"hex", anchor->hex}, {"category", category_name(anchor->category)}} : json(nullptr)},
+            {"anchor", anchor ? json{{"id", anchor->id}, {"name", anchor->name}, {"hex", anchor->hex}, {"category", category_name(anchor->category)}, {"formality", formality_name(anchor->formality)}} : json(nullptr)},
             {"occasion", occasion.name},
+            // the band itself, not just its name - the relaxed flags below say
+            // that we bent it, and this is what says what we bent it to
+            {"dress_code", {{"min", formality_name(occasion.min_formality)}, {"max", formality_name(occasion.max_formality)}}},
             {"vibe", vibe.name},
             {"weather", {{"temp_c", req.weather.temp_c}, {"warmth_min", warmth.min}, {"warmth_max", warmth.max}}},
-            {"candidates", {{"tops", candidates.tops.size()}, {"bottoms", candidates.bottoms.size()}, {"shoes", candidates.shoes.size()}, {"complete", candidates.complete()}, {"relaxed_formality", {{"tops", candidates.relaxed.tops}, {"bottoms", candidates.relaxed.bottoms}, {"shoes", candidates.relaxed.shoes}, {"any", candidates.relaxed.any()}}}}},
-            {"pairs_scored", sorted_ranked_pairs.size()},
+            {"candidates", {{"tops", candidates.tops.size()}, {"bottoms", candidates.bottoms.size()}, {"shoes", candidates.shoes.size()}, {"complete", candidates.complete()}, {"relaxed_formality", {{"tops", relaxed.tops}, {"bottoms", relaxed.bottoms}, {"shoes", relaxed.shoes}, {"anchor", relaxed.anchor}, {"any", relaxed.any()}}}}},
+            {"pairs_scored", scored.size()},
+            // how many of those the colour bar took. the difference between
+            // "your closet had nothing to pair" and "none of it went together"
+            // is the difference between two very different things to tell you
+            {"dropped_on_color", scored.size() - sorted_ranked_pairs.size()},
+            // measured over the survivors, not everything we scored: these are
+            // the outfits we would actually offer, so they are the only ones
+            // worth holding a new piece up against
             {"totals", sorted_ranked_pairs.empty() ? json(nullptr)
                                                    : totals_json(sorted_ranked_pairs)},
         };

@@ -19,6 +19,9 @@
   {#if app.looks.length > 1}
     <p class="px-8 count">LOOK {app.lookIndex + 1} OF {app.looks.length}</p>
   {/if}
+  {#if app.stretch}
+    <p class="px-7 stretch" role="status">{app.stretch}</p>
+  {/if}
 </div>
 
 <div class="right">
@@ -52,6 +55,9 @@
   .vibe  { margin: 0 0 8px; color: var(--pink); }
   .occ   { margin: 0 0 12px; color: #9adcff; }
   .count { margin: 0; color: var(--lilac); }
+  /* the look is under the dress code on purpose — flag it without shouting */
+  .stretch { margin: 16px 0 0; color: #ffd28a; line-height: 1.8;
+             overflow-wrap: anywhere; }
   .k { margin: 0 0 4px; color: #b38df2; }
   .v { margin: 0 0 18px; font-size: 8px; line-height: 1.6; color: #fbe8ff;
        text-shadow: 0 0 8px rgba(224,76,255,.5); overflow-wrap: anywhere; }

@@ -38,9 +38,12 @@ MAX_PAIRINGS = 1000
 SETTLED_DAYS = 14  # inside (RECENT_DAYS, STALE_DAYS] in engine/src/score.cpp
 
 # how much of the opposite rail a piece has to work with to be worth buying.
-# "works" means it beats the closet's median pairing, so a piece that is exactly
-# as good as what the user already owns lands near 0.5 by construction — the bar
-# is literally "pulls its weight", not an invented number
+# "works" means it beats the closet's median pairing, so a piece exactly as good
+# as what the user already owns lands near 0.5 by construction — the bar is
+# literally "pulls its weight", not an invented number.
+#
+# both are scaled by the closet's own survival rate before they are used; see
+# _survival for why.
 WORKS_RATIO = 0.5
 MAYBE_RATIO = 0.25
 
@@ -91,8 +94,28 @@ def _tier(total: float, bar: dict | None) -> str:
     return "weak"
 
 
-def _decide(shown: int, works: int, standouts: int, closet_can_dress: bool) -> str:
-    if shown == 0:
+def _survival(run: dict) -> float:
+    """What fraction of the pairs a run scored it was willing to offer.
+
+    The engine drops a pair whose colours clash before it ranks anything, and it
+    drops them out of the closet's own outfits too — so the median we compare a
+    candidate against is the median of the closet's *offerable* pairs, not of
+    everything it could put together. Measuring the candidate over everything it
+    was tried against while the bar is drawn over survivors only would hold it to
+    a standard the closet itself does not meet: on a closet that drops a seventh
+    of its pairs, a piece as good as what the user already owns tops out at 0.43
+    and never reads as buy. Scaling the bar by this puts them back on one scale.
+    """
+    scored = run.get("pairs_scored") or 0
+    if not scored:
+        return 1.0
+    return (scored - (run.get("dropped_on_color") or 0)) / scored
+
+
+def _decide(
+    tried: int, works: int, standouts: int, closet_can_dress: bool, survival: float
+) -> str:
+    if tried == 0:
         # nothing on the opposite rail, so there is no outfit to be had either way
         return "bye"
     if not closet_can_dress:
@@ -100,10 +123,10 @@ def _decide(shown: int, works: int, standouts: int, closet_can_dress: bool) -> s
         # piece is not competing with anything — it is the thing that unlocks it
         return "buy"
 
-    ratio = works / shown
-    if standouts and ratio >= WORKS_RATIO:
+    ratio = works / tried
+    if standouts and ratio >= WORKS_RATIO * survival:
         return "buy"
-    if standouts or ratio >= MAYBE_RATIO:
+    if standouts or ratio >= MAYBE_RATIO * survival:
         return "maybe"
     return "bye"
 
@@ -169,15 +192,28 @@ def try_on(
     standouts = sum(1 for p in pairings if p["tier"] == "standout")
     closet_can_dress = bool(bar)
 
+    # the denominator is everything it was held up against, not everything that
+    # came back. the engine drops a pair whose colours it has nothing good to
+    # say about, so `ranked` is already the survivors — counting the ratio over
+    # those would delete a piece's clashes from its own record and turn the
+    # closet it agrees with least into the one it scores best against
+    tried = trial.get("pairs_scored") or len(pairings)
+    clashes = trial.get("dropped_on_color") or 0
+
+    # the closet's own clash rate, which is what the bar gets scaled by
+    survival = _survival(baseline)
+
     return {
         "ok": True,
-        "verdict": _decide(len(pairings), works, standouts, closet_can_dress),
+        "verdict": _decide(tried, works, standouts, closet_can_dress, survival),
         "category": candidate["category"],
         # the rail it was tried against, so the UI can name it without guessing
         "pairs_with": OPPOSITE.get(candidate["category"], "Bottom"),
-        "tried": len(pairings),
+        "tried": tried,
         "works": works,
         "standouts": standouts,
+        # pieces the engine refuses to pair it with at all, on colour alone
+        "clashes": clashes,
         "closet_can_dress": closet_can_dress,
         "occasion": trial.get("occasion"),
         "vibe": trial.get("vibe"),
@@ -185,6 +221,9 @@ def try_on(
         # breakdown: a verdict that looks wrong is unarguable without the bar it
         # was measured against
         "baseline": bar,
+        # what the bar was scaled by, so a verdict that looks wrong can be
+        # argued with rather than just disbelieved
+        "closet_survival": survival,
         "candidate_totals": trial.get("totals"),
         "pairings": pairings[:SHOWN_PAIRINGS],
     }

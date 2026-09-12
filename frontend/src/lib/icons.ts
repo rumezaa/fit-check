@@ -79,6 +79,26 @@ export const TRASH: Bitmap = [
   '................',
 ]
 
+/** A shop bag — the piece is still in the store, which is the whole question. */
+export const BAG: Bitmap = [
+  '................',
+  '................',
+  '......####......',
+  '.....##..##.....',
+  '.....#....#.....',
+  '.....#....#.....',
+  '..############..',
+  '..############..',
+  '..##.######.##..',
+  '..##.######.##..',
+  '..############..',
+  '..############..',
+  '..############..',
+  '..############..',
+  '...##########...',
+  '................',
+]
+
 export const HEART: Bitmap = [
   '................',
   '................',
@@ -147,7 +167,7 @@ export const REFRESH: Bitmap = refreshBitmap()
 
 export const ICONS = {
   camera: CAMERA, wand: WAND, basket: BASKET,
-  trash: TRASH, heart: HEART, refresh: REFRESH,
+  trash: TRASH, heart: HEART, refresh: REFRESH, bag: BAG,
 } as const
 
 export type IconName = keyof typeof ICONS

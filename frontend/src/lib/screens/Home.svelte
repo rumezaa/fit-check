@@ -17,6 +17,11 @@
   <span class="px-7">ADD</span>
 </button>
 
+<button class="corner byebuy" onclick={() => app.startAdd('try-on')}>
+  <PixelIcon name="bag" size={40} />
+  <span class="px-7">BYE/BUY</span>
+</button>
+
 <button class="corner tr" onclick={() => app.go('saved')}>
   <PixelIcon name="heart" size={34} color="var(--pink)" />
   <span class="px-7">SAVED</span>
@@ -46,11 +51,14 @@
         onlaundry={() => app.flash('Laundry needs a backend route')} />
 </div>
 
-<!-- the third verb on this screen: DRESS ME wears the closet, GENERATE fills
-     it in, this one asks whether something outside it is worth owning -->
-<button class="byebuy px-12" onclick={() => app.startAdd('try-on')}>
-  BYE OR BUY?
-</button>
+{#if app.stretch}
+  <!-- the engine dressed you out of code rather than hand back nothing, so
+       say so here instead of letting the outfit look like a mistake -->
+  <div class="stretch chrome" role="status">
+    <span class="px-7 k">DRESS CODE STRETCHED</span>
+    <span class="px-7 v">{app.stretch}</span>
+  </div>
+{/if}
 
 {#if app.anchor}
   <div class="anchored chrome">
@@ -65,8 +73,8 @@
   <PixelIcon name="heart" size={38} color="var(--white)" />
 </button>
 
-{#if app.hasLooks}
-  <!-- appears beside the heart once the engine has looks to page through -->
+{#if app.canShuffle}
+  <!-- appears beside the heart once there is more than one look to page through -->
   <button class="shuffle" onclick={() => app.cycleLook()}
           title="Shuffle to the next generated outfit ({app.lookIndex + 1} of {app.looks.length})">
     <PixelIcon name="refresh" size={52} color="var(--white)" />
@@ -92,10 +100,18 @@
   .rack-b :global(.transport) { top: 396px; }
   :global(.pane)      { top: 0px; }
   :global(.transport) { top: 176px; }
-  .byebuy {
-    position: absolute; left: 54px; top: 196px; width: 220px; height: 68px;
-    background: var(--dark); color: var(--white);
+  /* the last slot in the corner row: 2px narrower than the others so it lands
+     flush against the rack pane at 274 rather than under it */
+  .byebuy { left: 184px; top: 0; width: 90px;
+            background: var(--dark); color: var(--white); }
+  /* the empty panel under the corner buttons, left of the racks */
+  .stretch {
+    position: absolute; left: 14px; top: 100px; width: 244px; max-height: 172px;
+    background: var(--blue); color: var(--white);
+    display: grid; align-content: start; gap: 8px; padding: 10px; overflow: hidden;
   }
+  .stretch .k { opacity: 0.85; }
+  .stretch .v { line-height: 1.7; overflow-wrap: anywhere; }
   .anchored {
     position: absolute; left: 54px; top: 286px; width: 220px; height: 72px;
     background: var(--pink); color: var(--white);
