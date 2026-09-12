@@ -46,6 +46,15 @@
         onlaundry={() => app.flash('Laundry needs a backend route')} />
 </div>
 
+{#if app.stretch}
+  <!-- the engine dressed you out of code rather than hand back nothing, so
+       say so here instead of letting the outfit look like a mistake -->
+  <div class="stretch chrome" role="status">
+    <span class="px-7 k">DRESS CODE STRETCHED</span>
+    <span class="px-7 v">{app.stretch}</span>
+  </div>
+{/if}
+
 {#if app.anchor}
   <div class="anchored chrome">
     <span class="px-7 k">STYLING AROUND</span>
@@ -59,8 +68,8 @@
   <PixelIcon name="heart" size={38} color="var(--white)" />
 </button>
 
-{#if app.hasLooks}
-  <!-- appears beside the heart once the engine has looks to page through -->
+{#if app.canShuffle}
+  <!-- appears beside the heart once there is more than one look to page through -->
   <button class="shuffle" onclick={() => app.cycleLook()}
           title="Shuffle to the next generated outfit ({app.lookIndex + 1} of {app.looks.length})">
     <PixelIcon name="refresh" size={52} color="var(--white)" />
@@ -86,6 +95,14 @@
   .rack-b :global(.transport) { top: 396px; }
   :global(.pane)      { top: 0px; }
   :global(.transport) { top: 176px; }
+  /* the empty panel under the corner buttons, left of the racks */
+  .stretch {
+    position: absolute; left: 14px; top: 100px; width: 244px; max-height: 172px;
+    background: var(--blue); color: var(--white);
+    display: grid; align-content: start; gap: 8px; padding: 10px; overflow: hidden;
+  }
+  .stretch .k { opacity: 0.85; }
+  .stretch .v { line-height: 1.7; overflow-wrap: anywhere; }
   .anchored {
     position: absolute; left: 54px; top: 286px; width: 220px; height: 72px;
     background: var(--pink); color: var(--white);
