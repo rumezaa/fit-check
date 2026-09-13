@@ -19,6 +19,7 @@ WORK_EDGE = 1536  # below ~1024 the dominant colour drifts light (dL +7 at 768):
 # downsampling blends a garment's dark folds into their lighter neighbours, and
 # the cluster extract_dominant_lch settles on moves with them.
 CUTOUT_EDGE = 768  # display only, and nothing renders above 200px
+MASK_MIN = 8  # alpha below this is haze around the mask, not part of the garment
 
 
 @lru_cache(maxsize=1)
@@ -46,7 +47,7 @@ def ingest(photo):
     # shoulders and shadows; it costs ~40ms and shrinks the png
     cutout = remove(img, session=_session(), post_process_mask=True)
     lch = extract_dominant_lch(cutout)  # read the colour before shrinking
-    cutout.thumbnail((CUTOUT_EDGE, CUTOUT_EDGE))
+    cutout = for_display(cutout)
 
     draft = {
         "color": {"l": lch.l, "c": lch.c, "h": lch.h},
@@ -59,6 +60,26 @@ def ingest(photo):
         "clean": True,
     }
     return draft, cutout
+
+
+def for_display(cutout):
+    """The form a cutout is stored and rendered in: cropped to the garment, then
+    shrunk to CUTOUT_EDGE.
+
+    remove() hands back a frame the size of the photo with the garment somewhere
+    inside it, so the transparent margin is whatever the person left around the
+    garment when they took the picture — usually uneven, often most of the
+    frame. Every place the app draws a cutout sizes the *file*, so that margin
+    became the layout: object-fit centres the frame and the garment lands off to
+    one side of its box. Cropping to the mask makes the file and the garment the
+    same rectangle, which is what the CSS has been assuming all along.
+    """
+    alpha = cutout.getchannel("A")
+    box = alpha.point(lambda v: 255 if v >= MASK_MIN else 0).getbbox()
+    if box:  # None when the mask came back empty; leave that frame alone
+        cutout = cutout.crop(box)
+    cutout.thumbnail((CUTOUT_EDGE, CUTOUT_EDGE))
+    return cutout
 
 
 def save_cutout(cutout, garment_id) -> str:
